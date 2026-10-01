@@ -132,11 +132,115 @@ void main() {
       await tester.pumpWidget(const MaterialApp(home: CashLedgerScreen()));
       await tester.pumpAndSettle();
 
+      if (find.text('Yeni Hafta Başladı! 📅').evaluate().isNotEmpty) {
+        await tester.tap(find.text('Paralarımı Say & Başla ✅'));
+        await tester.pumpAndSettle();
+      }
+
       expect(find.text('Nakit Para Defterim'), findsOneWidget);
       expect(find.text('Alışverişi Başlat 🛒'), findsOneWidget);
       expect(find.text('200 TL'), findsOneWidget);
       expect(find.text('100 TL'), findsOneWidget);
       expect(find.text('50 TL'), findsOneWidget);
+    });
+
+    testWidgets('Nakit Para Defterim: Alışveriş, Virgülün Solu +1 TL, Fiş Tarama ve Para Üstü akışı çalışmalı', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'user_wallet_counts': '{"200":1,"100":1,"50":1,"20":1,"10":1,"5":1,"1":5}',
+      });
+
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MaterialApp(home: CashLedgerScreen()));
+      await tester.pumpAndSettle();
+
+      // Hafta başı hatırlatma diyaloğu kontrolü
+      if (find.text('Yeni Hafta Başladı! 📅').evaluate().isNotEmpty) {
+        expect(find.text('Paralarımı Say & Başla ✅'), findsOneWidget);
+        await tester.tap(find.text('Paralarımı Say & Başla ✅'));
+        await tester.pumpAndSettle();
+      }
+
+      // Cüzdan toplamı görünmeli (200+100+50+20+10+5+5 = 390 TL)
+      expect(find.text('₺ 390'), findsOneWidget);
+
+      // Alışverişi Başlat
+      await tester.tap(find.text('Alışverişi Başlat 🛒'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Alışveriş Modu 🛒'), findsOneWidget);
+      expect(find.text('İlk Ürünü Ekle'), findsOneWidget);
+
+      // Ürün Ekle modalını aç
+      await tester.tap(find.text('İlk Ürünü Ekle'));
+      await tester.pumpAndSettle();
+
+      // Virgülün Solu ipucu ve +1 TL yuvarlama metni görünmeli
+      expect(find.textContaining('virgülün SOLUNDAKİ'), findsOneWidget);
+      expect(find.text('+ 1 TL Yuvarlama'), findsOneWidget);
+
+      // Ürün bilgilerini gir (24 TL -> 25 TL yuvarlanmalı)
+      await tester.enterText(find.widgetWithText(TextField, 'Ürün Adı'), 'Süt ve Ekmek');
+      await tester.enterText(find.widgetWithText(TextField, 'Virgülün Solundaki Tutar (TL)'), '24');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Sepete Ekle (+1 TL)'));
+      await tester.pumpAndSettle();
+
+      // Sepette 24 TL -> 25 TL olarak listelenmeli
+      expect(find.text('Süt ve Ekmek'), findsOneWidget);
+      expect(find.textContaining('1 TL Yuvarlama: 25 TL'), findsOneWidget);
+
+      // Alışverişi Bitir & Ödemeye Geç
+      await tester.tap(find.text('Alışverişi Bitir & Ödemeye Geç ➔'));
+      await tester.pumpAndSettle();
+
+      // Ödeme planı görünmeli: 25 TL hesaplanan toplam tutar
+      expect(find.text('₺ 25'), findsWidgets);
+      expect(find.text('Cüzdanındaki bu paraları vermelisin:'), findsOneWidget);
+
+      // Kasada Fişi Tara (Görsel İşleme) butonu görünmeli
+      expect(find.text('Kasada Fişi Tara (Görsel İşleme) 📸'), findsOneWidget);
+      expect(find.text('Fişi Okut (Kamera / Galeri)'), findsOneWidget);
+
+      // Fişi okutma diyaloğunu aç ve örnek fiş ile dene
+      await tester.ensureVisible(find.text('Fişi Okut (Kamera / Galeri)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Fişi Okut (Kamera / Galeri)'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Örnek Fiş ile Test Et 🧾'), findsOneWidget);
+      await tester.tap(find.text('Örnek Fiş ile Test Et 🧾'));
+      await tester.pumpAndSettle();
+
+      // Fiş başarıyla okundu badge'i görünmeli
+      expect(find.text('Fiş Başarıyla Okundu ✅'), findsOneWidget);
+
+      // Ödemeyi Yaptım & Cüzdanı Güncelle
+      await tester.ensureVisible(find.text('Ödemeyi Yaptım & Cüzdanı Güncelle ✅'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ödemeyi Yaptım & Cüzdanı Güncelle ✅'));
+      await tester.pumpAndSettle();
+
+      // Eğer para üstü varsa Para Üstü diyaloğu açılmalı veya fiş hatırlatma diyaloğu gelmeli
+      if (find.text('Para Üstü Aldın mı? 💵').evaluate().isNotEmpty) {
+        expect(find.text('Cüzdanıma Ekle & Tamamla ✅'), findsOneWidget);
+        await tester.tap(find.text('Cüzdanıma Ekle & Tamamla ✅'));
+        await tester.pumpAndSettle();
+      }
+
+      // Fişini Almayı Unutma uyarısı gelmeli
+      expect(find.text('Fişini Almayı Unutma! 🧾'), findsOneWidget);
+      expect(find.textContaining('eve götür'), findsOneWidget);
+      expect(find.text('Tamam, Fişimi Aldım ✅'), findsOneWidget);
+
+      await tester.tap(find.text('Tamam, Fişimi Aldım ✅'));
+      await tester.pumpAndSettle();
+
+      // Cüzdan ekranına dönülmüş ve yeni bakiye üzerinden devam ediliyor olmalı
+      expect(find.text('Nakit Para Defterim'), findsOneWidget);
     });
 
     testWidgets('Kredi Kartı Takibi açıldığında limit kartı, azalan çubuk ve harcama ekle gelmeli', (tester) async {

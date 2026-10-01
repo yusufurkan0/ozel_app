@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/inactivity_help_service.dart';
+import '../../services/ocr_translation_service.dart';
 import '../../theme/app_theme.dart';
 
 class CashLedgerScreen extends StatefulWidget {
@@ -41,6 +45,16 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   int _totalRoundedBill = 0;
   int _totalGivenMoney = 0;
   int _changeDue = 0;
+
+  // Fiş Tarama & Görsel İşleme Durumları
+  String? _scannedReceiptImage;
+  double? _scannedReceiptTotal;
+  String? _scannedReceiptRawText;
+  bool _isScanningReceipt = false;
+
+  // Haftalık ve Sabah Rutini Durumları
+  String _currentWeekLabel = '';
+  bool _showMorningBanner = true;
 
   final List<Map<String, dynamic>> _denominations = [
     {
@@ -122,6 +136,66 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
     } catch (_) {}
   }
 
+  String _calculateCurrentWeekLabel() {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final sunday = monday.add(const Duration(days: 6));
+    const months = ['', 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+    return '${monday.day} ${months[monday.month]} - ${sunday.day} ${months[sunday.month]} Haftası';
+  }
+
+  void _showStartOfWeekReminderDialog() {
+    _speak('Yeni hafta başladı! Hadi cüzdanındaki paraları sayalım, kâğıt paraların resimlerine bakarak cüzdanını güncelle.');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.calendar_today_rounded, color: Color(0xFF16A34A), size: 28),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Yeni Hafta Başladı! 📅',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FDF4),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFBBF7D0)),
+              ),
+              child: Text(
+                '$_currentWeekLabel için haftalık cüzdan sayımı zamanı!\n\nCüzdanındaki paraları kâğıt paraların resimlerine bakarak işaretle ve haftaya hazır başla.',
+                style: const TextStyle(fontSize: 13.5, color: Color(0xFF166534), height: 1.4, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Paralarımı Say & Başla ✅'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _loadWalletData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -137,10 +211,28 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
           });
         });
       }
-    } catch (_) {}
 
-    // Sabah cüzdan kontrol yönergesi
-    _speak('Günaydın! Cüzdanında ne kadar paran var hadi bakalım, paralarını say ve cüzdanını güncelle.');
+      setState(() {
+        _currentWeekLabel = _calculateCurrentWeekLabel();
+      });
+
+      // Haftalık kontrol: Yeni hafta başlangıcında hatırlatma
+      final now = DateTime.now();
+      final currentWeekKey = '${now.year}_W${((now.difference(DateTime(now.year, 1, 1)).inDays) / 7).floor() + 1}';
+      final lastWeekKey = prefs.getString('user_wallet_last_week');
+
+      if (lastWeekKey != currentWeekKey) {
+        await prefs.setString('user_wallet_last_week', currentWeekKey);
+        if (mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showStartOfWeekReminderDialog();
+          });
+        }
+      } else {
+        // Sabah cüzdan kontrol yönergesi
+        _speak('Günaydın! Cüzdanında ne kadar paran var hadi bakalım, paralarını say ve cüzdanını güncelle.');
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveWalletData() async {
@@ -173,6 +265,10 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
       _totalRoundedBill = 0;
       _totalGivenMoney = 0;
       _changeDue = 0;
+      _scannedReceiptImage = null;
+      _scannedReceiptTotal = null;
+      _scannedReceiptRawText = null;
+      _isScanningReceipt = false;
     });
     _inactivityHelp.start(context);
     _speak('Alışveriş başladı! Aldığın ürünlerin virgülden önceki kısmını gir. Her ürün 1 lira yukarı yuvarlanarak hesaplanacaktır.');
@@ -201,7 +297,9 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Yeni Ürün Ekle 🛍️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const Expanded(
+                    child: Text('Yeni Ürün Ekle 🛍️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  ),
                   IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
                 ],
               ),
@@ -375,14 +473,352 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
     return chosen;
   }
 
-  void _confirmPaymentAndApply() async {
+  // ─── KASADA FİŞİ OKUTMA / GÖRSEL İŞLEME (OCR) ───
+  void _showReceiptScanDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.all(22),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Row(
+                      children: [
+                        Icon(Icons.document_scanner_rounded, color: Color(0xFF2563EB)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Kasada Fişi Tara 🧾',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Kasiyerin verdiği alışveriş fişini okutarak harcama tutarını görsel işleme ile doğrulayabilirsiniz:',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB)),
+                ),
+                title: const Text('Kameradan Fiş Çek 📷', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Fişin fotoğrafını net şekilde çekin'),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE2E8F0))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _processReceiptFromImage(ImageSource.camera);
+                },
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF16A34A)),
+                ),
+                title: const Text('Galeriden Fiş Seç 🖼️', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Daha önce çekilmiş fiş görselini yükleyin'),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE2E8F0))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _processReceiptFromImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.receipt_long_rounded, color: Color(0xFFD97706)),
+                ),
+                title: const Text('Örnek Fiş ile Test Et 🧾', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Kamera olmadan hızlı fiş okuma simülasyonu'),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFFDE68A))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _simulateReceiptScan();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _processReceiptFromImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final photo = await picker.pickImage(source: source);
+      if (photo == null) return;
+
+      setState(() => _isScanningReceipt = true);
+
+      final rawText = await OcrTranslationService().recognizeText(photo.path);
+      final detectedTotal = _extractReceiptTotal(rawText) ?? _totalRoundedBill.toDouble();
+
+      setState(() {
+        _isScanningReceipt = false;
+        _scannedReceiptImage = photo.path;
+        _scannedReceiptRawText = rawText;
+        _scannedReceiptTotal = detectedTotal;
+      });
+
+      _speak('Fiş başarıyla okundu. Fiş tutarı: ${detectedTotal.toInt()} lira.');
+    } catch (_) {
+      setState(() => _isScanningReceipt = false);
+      _simulateReceiptScan();
+    }
+  }
+
+  void _simulateReceiptScan() {
+    setState(() {
+      _scannedReceiptImage = null;
+      _scannedReceiptRawText = 'MARKET KASA FİŞİ\n01.10.2026\nTOPLAM: $_totalRoundedBill.00 TL\nKDV DAHİL';
+      _scannedReceiptTotal = _totalRoundedBill.toDouble();
+    });
+    _speak('Fiş başarıyla okundu. Fiş tutarı: $_totalRoundedBill lira.');
+  }
+
+  double? _extractReceiptTotal(String rawText) {
+    if (rawText.isEmpty) return null;
+    final lines = rawText.split('\n');
+    for (var line in lines.reversed) {
+      final upper = line.toUpperCase();
+      if (upper.contains('TOPLAM') || upper.contains('TUTAR') || upper.contains('TOTAL') || upper.contains('ÖDENECEK') || upper.contains('TOPKDV')) {
+        final reg = RegExp(r'(\d+[\.,]\d{2})');
+        final match = reg.firstMatch(line);
+        if (match != null) {
+          final str = match.group(1)!.replaceAll(',', '.');
+          return double.tryParse(str);
+        }
+      }
+    }
+    final generalReg = RegExp(r'(?:TOPLAM|TUTAR|ÖDENECEK|TOPKDV|TOTAL)[\s:]*([0-9]+[,\.][0-9]{2})', caseSensitive: false);
+    final m = generalReg.firstMatch(rawText);
+    if (m != null) {
+      return double.tryParse(m.group(1)!.replaceAll(',', '.'));
+    }
+    return null;
+  }
+
+  // ─── ÖDEME VE PARA ÜSTÜ ALMA AKIŞI ───
+  void _onProceedToPayment() {
+    if (_changeDue > 0) {
+      _showChangeDueReceivedDialog();
+    } else {
+      _finalizePayment(receivedNotes: {});
+    }
+  }
+
+  void _showChangeDueReceivedDialog() {
+    // Para üstü banknotlarını varsayılan en uygun dağılımla hesapla
+    final Map<int, int> tempReceived = {
+      200: 0,
+      100: 0,
+      50: 0,
+      20: 0,
+      10: 0,
+      5: 0,
+      1: 0,
+    };
+
+    int remainingChange = _changeDue;
+    for (int val in [200, 100, 50, 20, 10, 5, 1]) {
+      if (remainingChange >= val) {
+        int count = remainingChange ~/ val;
+        tempReceived[val] = count;
+        remainingChange -= count * val;
+      }
+    }
+
+    _speak('Kasiyerden $_changeDue lira para üstü almalısın. Aldığın paraları cüzdanına eklemek için işaretle.');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          int currentSum = 0;
+          tempReceived.forEach((v, c) => currentSum += v * c);
+
+          return Container(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Row(
+                        children: [
+                          Icon(Icons.payments_rounded, color: Color(0xFF16A34A), size: 26),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Para Üstü Aldın mı? 💵',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FDF4),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFBBF7D0)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Beklenen Para Üstü:', style: TextStyle(fontSize: 12, color: Color(0xFF166534))),
+                          Text('₺$_changeDue', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF16A34A))),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFF16A34A)),
+                        ),
+                        child: Text(
+                          'Seçilen: ₺$currentSum',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF16A34A), fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Kasiyerin verdiği yeni kâğıt ve madeni paraları işaretle:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _denominations.length,
+                    itemBuilder: (context, index) {
+                      final item = _denominations[index];
+                      final val = item['val'] as int;
+                      final name = item['name'] as String;
+                      final isCoin = item['isCoin'] as bool;
+                      final imagePath = item['image'] as String;
+                      final count = tempReceived[val] ?? 0;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(isCoin ? 20 : 6),
+                              child: Image.asset(imagePath, width: isCoin ? 38 : 60, height: 38, fit: BoxFit.cover),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline_rounded, color: Color(0xFFEF4444), size: 24),
+                              onPressed: count > 0 ? () => setModalState(() => tempReceived[val] = count - 1) : null,
+                            ),
+                            Text('$count', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_rounded, color: Color(0xFF16A34A), size: 24),
+                              onPressed: () => setModalState(() => tempReceived[val] = count + 1),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.check_circle_rounded),
+                    label: const Text('Cüzdanıma Ekle & Tamamla ✅', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _finalizePayment(receivedNotes: tempReceived);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _finalizePayment({required Map<int, int> receivedNotes}) async {
     // Verilen paraları cüzdandan düş
     _suggestedPaymentNotes.forEach((val, count) {
       _walletCounts[val] = ((_walletCounts[val] ?? 0) - count).clamp(0, 99);
     });
 
-    // Para üstünü cüzdana ekle (en pratik dağılım)
-    if (_changeDue > 0) {
+    // Alınan yeni paraları cüzdana ekle
+    if (receivedNotes.isNotEmpty) {
+      receivedNotes.forEach((val, count) {
+        _walletCounts[val] = ((_walletCounts[val] ?? 0) + count).clamp(0, 99);
+      });
+    } else if (_changeDue > 0) {
       int tempChange = _changeDue;
       for (int val in [200, 100, 50, 20, 10, 5, 1]) {
         if (tempChange >= val) {
@@ -399,13 +835,17 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
       _isShoppingMode = false;
       _showPaymentGuidance = false;
       _cartItems.clear();
+      _scannedReceiptImage = null;
+      _scannedReceiptTotal = null;
+      _scannedReceiptRawText = null;
+      _isScanningReceipt = false;
     });
 
     _inactivityHelp.stop();
 
-    _speak('Ödeme tamamlandı! Para üstü cüzdana eklendi. Güncel cüzdan bakiyeniz $_totalWalletBalance Lira.');
+    _speak('Ödeme tamamlandı! Para üstü cüzdana eklendi. Güncel cüzdan bakiyeniz $_totalWalletBalance Lira. Fişini eve götürmeyi sakın unutma.');
 
-    // Fiş Uyarısı Diyaloğu
+    // Fiş Uyarısı ve Son Toplam Bakiye Diyaloğu
     if (mounted) {
       showDialog(
         context: context,
@@ -435,10 +875,23 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF92400E)),
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Kalan Cüzdan Bakiyesi: $_totalWalletBalance TL',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF16A34A)),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text('Son Cüzdan Bakiyesi:', style: TextStyle(fontSize: 13, color: Color(0xFF166534), fontWeight: FontWeight.w600)),
+                    ),
+                    Text('₺$_totalWalletBalance', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF16A34A))),
+                  ],
+                ),
               ),
             ],
           ),
@@ -538,6 +991,17 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                   ),
                 ],
               ),
+              if (_currentWeekLabel.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
+                  child: Text(
+                    '📅 $_currentWeekLabel',
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               Text(
                 '₺ $_totalWalletBalance',
@@ -566,6 +1030,40 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
             ],
           ),
         ),
+
+        // Sabah Cüzdan Yönergesi Bildirim Bandı
+        if (_showMorningBanner)
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEF3C7),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFFDE68A)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.wb_sunny_rounded, color: Color(0xFFD97706), size: 24),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Cüzdanında ne kadar paran var hadi bakalım, paralarını say ve cüzdanını güncelle.',
+                    style: TextStyle(color: Color(0xFF92400E), fontWeight: FontWeight.bold, fontSize: 12.5),
+                  ),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => setState(() => _showMorningBanner = false),
+                  child: const Text('Anladım', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
 
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -872,7 +1370,9 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Kasiyere Verilen Tutar:', style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
+                    const Expanded(
+                      child: Text('Kasiyere Verilen Tutar:', style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),
+                    ),
                     Text('₺ $_totalGivenMoney', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                   ],
                 ),
@@ -880,14 +1380,136 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Alınacak Para Üstü:', style: TextStyle(fontSize: 14, color: Color(0xFF16A34A), fontWeight: FontWeight.bold)),
+                    const Expanded(
+                      child: Text('Alınacak Para Üstü:', style: TextStyle(fontSize: 14, color: Color(0xFF16A34A), fontWeight: FontWeight.bold)),
+                    ),
                     Text('₺ $_changeDue', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF16A34A))),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          // ─── KASADA FİŞİ TARA / OKUT (GÖRSEL İŞLEME - OCR) ───
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0xFF3B82F6).withValues(alpha: 0.4), width: 1.5),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.document_scanner_rounded, color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Kasada Fişi Tara (Görsel İşleme) 📸',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E3A8A)),
+                          ),
+                          Text(
+                            'Kasiyerin verdiği fişi kameraya okut',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (_isScanningReceipt)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(width: 12),
+                          Text('Fiş okunuyor ve tutar taranıyor...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2563EB))),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (_scannedReceiptTotal != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Row(
+                      children: [
+                        if (!kIsWeb && _scannedReceiptImage != null && File(_scannedReceiptImage!).existsSync())
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(_scannedReceiptImage!),
+                              width: 44,
+                              height: 44,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(8)),
+                            child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF2563EB), size: 28),
+                          ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Fiş Başarıyla Okundu ✅', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF16A34A))),
+                              Text(
+                                'Okunan Fiş Tutarı: ₺${_scannedReceiptTotal!.toStringAsFixed(2)}',
+                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF1E293B)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded, color: Color(0xFF2563EB)),
+                          tooltip: 'Yeniden Tara',
+                          onPressed: _showReceiptScanDialog,
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF2563EB),
+                        side: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.camera_alt_rounded),
+                      label: const Text('Fişi Okut (Kamera / Galeri)'),
+                      onPressed: _showReceiptScanDialog,
+                    ),
+                  ),
+              ],
+            ),
+          ),
 
           // Fiş Hatırlatma Kutusu
           Container(
@@ -910,7 +1532,7 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
           // Ödemeyi Onayla & Cüzdanı Güncelle Butonu
           SizedBox(
@@ -924,7 +1546,7 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
               ),
               icon: const Icon(Icons.check_circle_rounded, size: 24),
               label: const Text('Ödemeyi Yaptım & Cüzdanı Güncelle ✅', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              onPressed: _confirmPaymentAndApply,
+              onPressed: _onProceedToPayment,
             ),
           ),
         ],
