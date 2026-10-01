@@ -11,13 +11,20 @@ import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'parent_dashboard_screen.dart';
 
-/// 📝 Yeni Kullanıcı Kayıt Ekranı (Öğrenci & Veli)
+import 'launcher/support_contacts_screen.dart';
+
+/// 📝 Genel Bilgiler & Kayıt Ekranı (Öğrenci, Veli & Acil Durum SOS)
 /// Öğrenci kaydında tam çocuk & SOS profilini alır. İsteğe bağlı tek seferde Veli hesabı da açar.
-/// Veli kaydında ise sadeleşerek doğrudan veli hesabı açıp öğrenciye bağlar.
+/// Düzenleme modunda (isEditing: true) ise "Genel Bilgiler" olarak açılıp kayıtlı tüm bilgileri günceller.
 class RegisterScreen extends StatefulWidget {
   final UserRole initialRole;
+  final bool isEditing;
 
-  const RegisterScreen({super.key, this.initialRole = UserRole.student});
+  const RegisterScreen({
+    super.key,
+    this.initialRole = UserRole.student,
+    this.isEditing = false,
+  });
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -80,6 +87,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_selectedRole == UserRole.parent) {
       _selectedAvatar = '👩';
     }
+    if (widget.isEditing) {
+      _loadExistingData();
+    }
+  }
+
+  Future<void> _loadExistingData() async {
+    setState(() => _isLoading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final childName = prefs.getString('child_name') ??
+          prefs.getString('sos_child_name') ??
+          prefs.getString('user_emergency_name') ??
+          '';
+      final ageStr = prefs.getString('sos_child_age') ?? '';
+      final parentName = prefs.getString('sos_parent_name') ?? '';
+      final parentPhone = prefs.getString('sos_parent_phone') ??
+          prefs.getString('user_emergency_phone') ??
+          '';
+      final altPhone = prefs.getString('sos_alt_phone') ?? '';
+      final address = prefs.getString('sos_home_address') ??
+          prefs.getString('user_home_address') ??
+          '';
+      final notes = prefs.getString('sos_medical_notes') ??
+          prefs.getString('user_emergency_notes') ??
+          '';
+      final diagnosis = prefs.getString('child_diagnosis') ?? '';
+      final avatar = prefs.getString('avatar') ?? '';
+
+      _childNameController.text = childName;
+      _ageController.text = ageStr.replaceAll(RegExp(r'\D'), '');
+      _parentNameController.text = parentName;
+      _parentPhoneController.text = parentPhone;
+      _altPhoneController.text = altPhone;
+      _addressController.text = address;
+      _medicalNotesController.text = notes;
+      if (_diagnosisOptions.contains(diagnosis)) {
+        _selectedDiagnosis = diagnosis;
+      }
+      if (_avatars.contains(avatar)) {
+        _selectedAvatar = avatar;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -259,12 +309,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('sos_child_name', childName);
     await prefs.setString('child_name', childName);
+    await prefs.setString('user_emergency_name', childName);
     await prefs.setString('sos_child_age', childAge.isNotEmpty ? '$childAge Yaşında' : '');
     await prefs.setString('sos_parent_name', parentName);
     await prefs.setString('sos_parent_phone', parentPhone);
+    await prefs.setString('user_emergency_phone', parentPhone);
     await prefs.setString('sos_alt_phone', altPhone);
     await prefs.setString('sos_home_address', address);
+    await prefs.setString('user_home_address', address);
     await prefs.setString('sos_medical_notes', notes);
+    await prefs.setString('user_emergency_notes', notes);
     await prefs.setString('child_diagnosis', _selectedDiagnosis);
     await prefs.setString('avatar', _selectedAvatar);
     await prefs.setBool('is_registered', true);
@@ -306,7 +360,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       SnackBar(
         content: Text(_createDualParentAccount
             ? 'Öğrenci ve Ebeveyn hesapları başarıyla oluşturulup bağlandı! 🎉'
-            : 'Öğrenci hesabı ve bilgileri başarıyla kaydedildi! 🎉'),
+            : 'Genel bilgiler ve öğrenci hesabı başarıyla kaydedildi! 🎉'),
         backgroundColor: AppColors.positiveGreen,
       ),
     );
@@ -320,13 +374,110 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  /// 💾 Genel Bilgileri Güncelle & Kaydet (Düzenleme Modu)
+  Future<void> _handleSaveGeneralInfo() async {
+    final childName = _childNameController.text.trim();
+    final parentPhone = _parentPhoneController.text.trim();
+
+    if (childName.isEmpty) {
+      _showError('Lütfen öğrencinin / çocuğun adını giriniz.');
+      return;
+    }
+    if (parentPhone.isEmpty) {
+      _showError('Acil durumda aranacak ebeveyn telefon numarasını giriniz.');
+      return;
+    }
+
+    final cleanPhone = parentPhone.replaceAll(RegExp(r'\D'), '');
+    if (cleanPhone.length < 10) {
+      _showError('Lütfen geçerli bir telefon numarası giriniz (en az 10-11 hane).');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    final childAge = _ageController.text.trim();
+    final parentName = _parentNameController.text.trim().isNotEmpty
+        ? _parentNameController.text.trim()
+        : 'Ebeveyn';
+    final altPhone = _altPhoneController.text.trim();
+    final address = _addressController.text.trim();
+
+    String notes = _medicalNotesController.text.trim();
+    if (notes.isEmpty) {
+      notes = 'Tanı: $_selectedDiagnosis.';
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('sos_child_name', childName);
+    await prefs.setString('child_name', childName);
+    await prefs.setString('user_emergency_name', childName);
+    await prefs.setString('sos_child_age', childAge.isNotEmpty ? '$childAge Yaşında' : '');
+    await prefs.setString('sos_parent_name', parentName);
+    await prefs.setString('sos_parent_phone', parentPhone);
+    await prefs.setString('user_emergency_phone', parentPhone);
+    await prefs.setString('sos_alt_phone', altPhone);
+    await prefs.setString('sos_home_address', address);
+    await prefs.setString('user_home_address', address);
+    await prefs.setString('sos_medical_notes', notes);
+    await prefs.setString('user_emergency_notes', notes);
+    await prefs.setString('child_diagnosis', _selectedDiagnosis);
+    await prefs.setString('avatar', _selectedAvatar);
+    await prefs.setBool('is_registered', true);
+
+    // Destek kişileri rehberinde Ebeveyn kaydını senkronize et
+    try {
+      final contactsStr = prefs.getString('user_support_contacts');
+      List<Map<String, dynamic>> contacts = [];
+      if (contactsStr != null && contactsStr.isNotEmpty) {
+        final decoded = jsonDecode(contactsStr) as List;
+        for (final item in decoded) {
+          contacts.add(Map<String, dynamic>.from(item as Map));
+        }
+      }
+      final parentIdx = contacts.indexWhere((c) => (c['role'] ?? '').toString().toLowerCase() == 'aile');
+      if (parentIdx >= 0) {
+        contacts[parentIdx]['name'] = parentName;
+        contacts[parentIdx]['phone'] = parentPhone;
+      } else {
+        contacts.insert(0, {
+          'name': parentName,
+          'role': 'Aile',
+          'phone': parentPhone,
+          'avatar': '👨‍👩‍👧',
+          'isJobCoach': false,
+        });
+      }
+      await prefs.setString('user_support_contacts', jsonEncode(contacts));
+    } catch (_) {}
+
+    if (mounted) {
+      final gameService = Provider.of<GameProgressService>(context, listen: false);
+      await gameService.saveProfile(childName, _selectedAvatar);
+      await gameService.loadData();
+    }
+
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Genel bilgiler ve acil durum kayıtları başarıyla güncellendi! ✅'),
+        backgroundColor: AppColors.positiveGreen,
+      ),
+    );
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isParentRole = _selectedRole == UserRole.parent;
+    final isParentRole = _selectedRole == UserRole.parent && !widget.isEditing;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isParentRole ? 'Veli Hesabı Oluştur' : 'Öğrenci Hesabı Oluştur'),
+        title: Text(widget.isEditing
+            ? 'Genel Bilgiler'
+            : (isParentRole ? 'Veli Hesabı Oluştur' : 'Genel Bilgiler & Kayıt')),
         elevation: 0,
       ),
       body: Container(
@@ -347,11 +498,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       width: 54,
                       height: 54,
                       decoration: BoxDecoration(
-                        color: AppColors.buttonOrange.withValues(alpha: 0.15),
+                        color: widget.isEditing
+                            ? AppColors.buttonIndigo.withValues(alpha: 0.15)
+                            : AppColors.buttonOrange.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
-                        child: Text(isParentRole ? '👨‍👩‍👧' : '🎈', style: const TextStyle(fontSize: 28)),
+                        child: Text(
+                          widget.isEditing
+                              ? '📋'
+                              : (isParentRole ? '👨‍👩‍👧' : '🎈'),
+                          style: const TextStyle(fontSize: 28),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -360,7 +518,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isParentRole ? 'Veli Kontrol Hesabı' : 'Hoş Geldiniz!',
+                            widget.isEditing
+                                ? 'Genel Bilgiler'
+                                : (isParentRole ? 'Veli Kontrol Hesabı' : 'Genel Bilgiler & Kayıt'),
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -369,9 +529,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            isParentRole
-                                ? 'Çocuğunuzun iletişimini takip etmek ve yönetmek için veli hesabı açın.'
-                                : 'Çocuğunuzun güvenliği ve doğru iletişim için bilgileri doldurunuz.',
+                            widget.isEditing
+                                ? 'Öğrenci, veli ve acil durum (SOS) bilgilerinizi buradan inceleyip güncelleyebilirsiniz.'
+                                : (isParentRole
+                                    ? 'Çocuğunuzun iletişimini takip etmek ve yönetmek için veli hesabı açın.'
+                                    : 'Çocuğunuzun bilgileri, veli ve acil durum iletişimi için formu doldurunuz.'),
                             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ],
@@ -399,42 +561,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 16),
                 ],
 
-                // ─── ROL SEÇİCİ ─────────────────────────────────────────
-                _buildSectionHeader('👤 Hesap Rolü', 'Kayıt olmak istediğiniz kullanıcı türünü seçin'),
-                const SizedBox(height: 10),
+                if (!widget.isEditing) ...[
+                  // ─── ROL SEÇİCİ ─────────────────────────────────────────
+                  _buildSectionHeader('👤 Hesap Rolü', 'Kayıt olmak istediğiniz kullanıcı türünü seçin'),
+                  const SizedBox(height: 10),
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildRoleChip(
-                        role: UserRole.student,
-                        title: 'Öğrenci (Çocuk)',
-                        icon: Icons.child_care_rounded,
-                        onSelect: () {
-                          setState(() {
-                            _selectedRole = UserRole.student;
-                            _selectedAvatar = '🐻';
-                          });
-                        },
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildRoleChip(
+                          role: UserRole.student,
+                          title: 'Öğrenci (Çocuk)',
+                          icon: Icons.child_care_rounded,
+                          onSelect: () {
+                            setState(() {
+                              _selectedRole = UserRole.student;
+                              _selectedAvatar = '🐻';
+                            });
+                          },
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _buildRoleChip(
-                        role: UserRole.parent,
-                        title: 'Veli (Ebeveyn)',
-                        icon: Icons.family_restroom_rounded,
-                        onSelect: () {
-                          setState(() {
-                            _selectedRole = UserRole.parent;
-                            _selectedAvatar = '👩';
-                          });
-                        },
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildRoleChip(
+                          role: UserRole.parent,
+                          title: 'Veli (Ebeveyn)',
+                          icon: Icons.family_restroom_rounded,
+                          onSelect: () {
+                            setState(() {
+                              _selectedRole = UserRole.parent;
+                              _selectedAvatar = '👩';
+                            });
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
 
                 // ═══════════════════════════════════════════════════════════
                 // A) SADE VELİ KAYDI FORMU
@@ -544,41 +708,43 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   // B) ÖĞRENCİ KAYDI FORMU (TAM PROFİL & SOS + ÇİFT HESAP SEÇENEĞİ)
                   // ═══════════════════════════════════════════════════════════
 
-                  // 0. BÖLÜM: ÖĞRENCİ HESAP BİLGİLERİ
-                  _buildSectionHeader('🔐 Öğrenci Giriş Bilgileri', 'Öğrenci terminaline giriş için kullanılacaktır'),
-                  const SizedBox(height: 10),
+                  // 0. BÖLÜM: ÖĞRENCİ HESAP BİLGİLERİ (Sadece Yeni Kayıtta)
+                  if (!widget.isEditing) ...[
+                    _buildSectionHeader('🔐 Öğrenci Giriş Bilgileri', 'Öğrenci terminaline giriş için kullanılacaktır'),
+                    const SizedBox(height: 10),
 
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: Neu.elevated(radius: 20, blur: 8),
-                    child: Column(
-                      children: [
-                        _buildTextField(
-                          controller: _usernameCtrl,
-                          label: 'Öğrenci Kullanıcı Adı *',
-                          hint: 'Örn: can veya ahmet123',
-                          icon: Icons.alternate_email_rounded,
-                        ),
-                        const SizedBox(height: 12),
-
-                        _buildTextField(
-                          controller: _passwordCtrl,
-                          label: 'Giriş Şifresi *',
-                          hint: 'En az 3 karakter',
-                          icon: Icons.lock_rounded,
-                          obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                              color: AppColors.textSecondary,
-                            ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: Neu.elevated(radius: 20, blur: 8),
+                      child: Column(
+                        children: [
+                          _buildTextField(
+                            controller: _usernameCtrl,
+                            label: 'Öğrenci Kullanıcı Adı *',
+                            hint: 'Örn: can veya ahmet123',
+                            icon: Icons.alternate_email_rounded,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 12),
+
+                          _buildTextField(
+                            controller: _passwordCtrl,
+                            label: 'Giriş Şifresi *',
+                            hint: 'En az 3 karakter',
+                            icon: Icons.lock_rounded,
+                            obscureText: _obscurePassword,
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                color: AppColors.textSecondary,
+                              ),
+                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
+                  ],
 
                   // 1. BÖLÜM: ÇOCUĞUN BİLGİLERİ
                   _buildSectionHeader('👦 1. Çocuğun Bilgileri', 'Uygulama içinde görünecek profil'),
@@ -735,64 +901,115 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // 3. BÖLÜM: OTOMATİK EBEVEYN HESABI OLUŞTURMA (Opsiyonel Kolaylık)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.buttonIndigo.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: AppColors.buttonIndigo.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text(
-                            '👨‍👩‍👧 Ebeveyn Giriş Hesabı da Açılsın',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  if (widget.isEditing) ...[
+                    // 3. BÖLÜM: DESTEK KİŞİLERİ REHBERİ (Hızlı Erişim)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDF2F8),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFF472B6).withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFCE7F3),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.volunteer_activism_rounded, color: Color(0xFFBE185D), size: 28),
                           ),
-                          subtitle: const Text(
-                            'Diğer cihazdan (Windows/telefon) veli girişi yapmak için tek seferde hesabınızı bağlar.',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                          ),
-                          value: _createDualParentAccount,
-                          activeThumbColor: AppColors.buttonIndigo,
-                          onChanged: (val) => setState(() => _createDualParentAccount = val),
-                        ),
-                        if (_createDualParentAccount) ...[
-                          const SizedBox(height: 10),
-                          _buildTextField(
-                            controller: _dualParentUsernameCtrl,
-                            label: 'Ebeveyn Kullanıcı Adı *',
-                            hint: 'Örn: anne_ayse',
-                            icon: Icons.person_pin_rounded,
-                          ),
-                          const SizedBox(height: 10),
-                          _buildTextField(
-                            controller: _dualParentPasswordCtrl,
-                            label: 'Ebeveyn Giriş Şifresi *',
-                            hint: 'En az 3 karakter',
-                            icon: Icons.lock_outline_rounded,
-                            obscureText: _obscureDualPassword,
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscureDualPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                                color: AppColors.textSecondary,
-                              ),
-                              onPressed: () => setState(() => _obscureDualPassword = !_obscureDualPassword),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Destek Kişilerim Rehberi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF9D174D))),
+                                SizedBox(height: 3),
+                                Text('İş koçu, öğretmen ve aile numaralarını yönetin.', style: TextStyle(fontSize: 11, color: Color(0xFFBE185D))),
+                              ],
                             ),
                           ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFBE185D),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const SupportContactsScreen()),
+                              );
+                            },
+                            child: const Text('Rehber 📖', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
+                  ] else ...[
+                    // 3. BÖLÜM: OTOMATİK EBEVEYN HESABI OLUŞTURMA (Opsiyonel Kolaylık)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.buttonIndigo.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.buttonIndigo.withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text(
+                              '👨‍👩‍👧 Ebeveyn Giriş Hesabı da Açılsın',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            subtitle: const Text(
+                              'Diğer cihazdan (Windows/telefon) veli girişi yapmak için tek seferde hesabınızı bağlar.',
+                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            ),
+                            value: _createDualParentAccount,
+                            activeThumbColor: AppColors.buttonIndigo,
+                            onChanged: (val) => setState(() => _createDualParentAccount = val),
+                          ),
+                          if (_createDualParentAccount) ...[
+                            const SizedBox(height: 10),
+                            _buildTextField(
+                              controller: _dualParentUsernameCtrl,
+                              label: 'Ebeveyn Kullanıcı Adı *',
+                              hint: 'Örn: anne_ayse',
+                              icon: Icons.person_pin_rounded,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildTextField(
+                              controller: _dualParentPasswordCtrl,
+                              label: 'Ebeveyn Giriş Şifresi *',
+                              hint: 'En az 3 karakter',
+                              icon: Icons.lock_outline_rounded,
+                              obscureText: _obscureDualPassword,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureDualPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                  color: AppColors.textSecondary,
+                                ),
+                                onPressed: () => setState(() => _obscureDualPassword = !_obscureDualPassword),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 28),
 
                 // ─── KAYDET BUTONU ──────────────────────────────────────
                 GestureDetector(
-                  onTap: _isLoading ? null : _handleRegister,
+                  onTap: _isLoading ? null : (widget.isEditing ? _handleSaveGeneralInfo : _handleRegister),
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 18),
@@ -807,14 +1024,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                           )
                         else ...[
-                          Text(
-                            isParentRole
-                                ? 'Veli Hesabını Oluştur & Bağla 🚀'
-                                : 'Değişiklikleri Kaydet ✅',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                          Flexible(
+                            child: Text(
+                              widget.isEditing
+                                  ? 'Genel Bilgileri Güncelle & Kaydet ✅'
+                                  : (isParentRole
+                                      ? 'Veli Hesabını Oluştur & Bağla 🚀'
+                                      : 'Genel Bilgileri & Hesabı Kaydet 🚀'),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),

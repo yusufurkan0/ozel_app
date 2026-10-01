@@ -16,6 +16,7 @@ import 'launcher/disaster_emergency_screen.dart';
 import 'launcher/free_time_planner_screen.dart';
 import 'launcher/kitchen_safety_screen.dart';
 import 'launcher/support_contacts_screen.dart';
+import 'register_screen.dart';
 
 /// Her biri ayrı blok blok renkli, modern ve ergonomik 12 modüllü ana ekran.
 class HomeScreen extends StatelessWidget {
@@ -65,6 +66,29 @@ class HomeScreen extends StatelessWidget {
                   child: Text(av, style: const TextStyle(fontSize: 22)),
                 ),
               )).toList(),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF1D4ED8),
+                  side: const BorderSide(color: Color(0xFF93C5FD)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                icon: const Icon(Icons.badge_rounded, size: 18),
+                label: const Text('Genel Bilgileri Düzenle (Acil Durum & Veli)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const RegisterScreen(isEditing: true),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -301,6 +325,41 @@ class HomeScreen extends StatelessWidget {
                                     ),
                                   ],
                                 ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Sağ: Genel Bilgiler Butonu
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const RegisterScreen(isEditing: true),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFF93C5FD), width: 1.2),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.badge_rounded, size: 16, color: Color(0xFF1D4ED8)),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'Genel Bilgiler',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                      color: Color(0xFF1D4ED8),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),

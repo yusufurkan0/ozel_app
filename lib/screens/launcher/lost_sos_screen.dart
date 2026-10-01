@@ -37,10 +37,25 @@ class _LostSosScreenState extends State<LostSosScreen> {
   Future<void> _loadEmergencyInfo() async {
     try {
       _prefs = await SharedPreferences.getInstance();
-      _childName = _prefs?.getString('user_emergency_name') ?? '';
-      _emergencyPhone = _prefs?.getString('user_emergency_phone') ?? '';
-      _emergencyNotes = _prefs?.getString('user_emergency_notes') ?? '';
-      _homeAddress = _prefs?.getString('user_home_address') ?? '';
+      final savedName = _prefs?.getString('user_emergency_name');
+      _childName = (savedName != null && savedName.isNotEmpty)
+          ? savedName
+          : (_prefs?.getString('child_name') ?? _prefs?.getString('sos_child_name') ?? '');
+
+      final savedPhone = _prefs?.getString('user_emergency_phone');
+      _emergencyPhone = (savedPhone != null && savedPhone.isNotEmpty)
+          ? savedPhone
+          : (_prefs?.getString('sos_parent_phone') ?? '');
+
+      final savedNotes = _prefs?.getString('user_emergency_notes');
+      _emergencyNotes = (savedNotes != null && savedNotes.isNotEmpty)
+          ? savedNotes
+          : (_prefs?.getString('sos_medical_notes') ?? '');
+
+      final savedAddress = _prefs?.getString('user_home_address');
+      _homeAddress = (savedAddress != null && savedAddress.isNotEmpty)
+          ? savedAddress
+          : (_prefs?.getString('sos_home_address') ?? '');
 
       final savedContacts = _prefs?.getString('user_support_contacts');
       if (savedContacts != null && savedContacts.isNotEmpty) {
@@ -67,9 +82,17 @@ class _LostSosScreenState extends State<LostSosScreen> {
       _homeAddress = address;
     });
     await _prefs?.setString('user_emergency_name', name);
+    await _prefs?.setString('sos_child_name', name);
+    await _prefs?.setString('child_name', name);
+
     await _prefs?.setString('user_emergency_phone', phone);
+    await _prefs?.setString('sos_parent_phone', phone);
+
     await _prefs?.setString('user_emergency_notes', notes);
+    await _prefs?.setString('sos_medical_notes', notes);
+
     await _prefs?.setString('user_home_address', address);
+    await _prefs?.setString('sos_home_address', address);
     _speak('Bilgileriniz kaydedildi.');
   }
 

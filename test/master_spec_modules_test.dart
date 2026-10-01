@@ -9,6 +9,9 @@ import 'package:ozel_app/screens/launcher/free_time_planner_screen.dart';
 import 'package:ozel_app/screens/launcher/cash_ledger_screen.dart';
 import 'package:ozel_app/screens/launcher/card_budget_screen.dart';
 import 'package:ozel_app/screens/launcher/support_contacts_screen.dart';
+import 'package:ozel_app/screens/register_screen.dart';
+import 'package:ozel_app/services/game_progress_service.dart';
+import 'package:provider/provider.dart';
 
 void main() {
   setUp(() {
@@ -157,9 +160,42 @@ void main() {
 
       await tester.pumpWidget(const MaterialApp(home: SupportContactsScreen()));
       await tester.pumpAndSettle();
-
       expect(find.text('Destek Kişilerim'), findsOneWidget);
       expect(find.byIcon(Icons.person_add_alt_1_rounded), findsOneWidget);
+    });
+
+    testWidgets('Genel Bilgiler ekranı (RegisterScreen isEditing: true) doğru başlık ve SOS alanları ile açılmalı', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'child_name': 'Ali Can',
+        'sos_parent_name': 'Ayşe Can',
+        'sos_parent_phone': '05551234567',
+        'sos_child_age': '12 Yaşında',
+      });
+
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final gameService = GameProgressService();
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<GameProgressService>.value(
+          value: gameService,
+          child: const MaterialApp(
+            home: RegisterScreen(isEditing: true),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Genel Bilgiler başlıkları
+      expect(find.text('Genel Bilgiler'), findsNWidgets(2)); // AppBar ve karşılama başlığı
+      expect(find.text('Genel Bilgileri Güncelle & Kaydet ✅'), findsOneWidget);
+      expect(find.text('Destek Kişilerim Rehberi'), findsOneWidget);
+
+      // SOS ve Ebeveyn alanları
+      expect(find.text('🚨 2. Ebeveyn & Acil Durum (SOS)'), findsOneWidget);
+      expect(find.text('👦 1. Çocuğun Bilgileri'), findsOneWidget);
     });
   });
 }

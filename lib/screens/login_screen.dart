@@ -264,7 +264,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           );
                         },
                         child: const Text(
-                          'Kayıt Olun',
+                          'Kayıt Olun (Genel Bilgiler)',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
