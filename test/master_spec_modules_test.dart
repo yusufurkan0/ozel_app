@@ -103,9 +103,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Takvimim'), findsOneWidget);
-      expect(find.text('1. Öğle Yemeğinden Önce'), findsOneWidget);
-      expect(find.text('2. Öğle Yemeği'), findsOneWidget);
-      expect(find.text('3. Öğle Yemeğinden Sonra'), findsOneWidget);
+      expect(find.text('1. ÖĞLE\nÖNCESİ'), findsOneWidget);
+      expect(find.text('2. ÖĞLE\nYEMEĞİ'), findsOneWidget);
+      expect(find.text('3. ÖĞLE\nSONRASI'), findsOneWidget);
       expect(find.text('KİLİTLİ'), findsWidgets);
     });
 
