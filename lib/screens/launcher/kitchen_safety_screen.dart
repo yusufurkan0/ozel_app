@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import '../../data/lezzet_plus_recipes.dart';
+import '../../models/kitchen_recipe.dart';
 import '../../theme/app_theme.dart';
+import 'kitchen_recipe_detail_screen.dart';
 
 class KitchenSafetyScreen extends StatefulWidget {
   const KitchenSafetyScreen({super.key});
@@ -9,70 +12,43 @@ class KitchenSafetyScreen extends StatefulWidget {
   State<KitchenSafetyScreen> createState() => _KitchenSafetyScreenState();
 }
 
-class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTickerProviderStateMixin {
+class _KitchenSafetyScreenState extends State<KitchenSafetyScreen>
+    with SingleTickerProviderStateMixin {
   final FlutterTts _tts = FlutterTts();
   late TabController _tabCtrl;
-
-  final List<Map<String, dynamic>> _recipes = [
-    {
-      'title': 'Lezzetli Peynirli Sandviç',
-      'icon': Icons.lunch_dining_rounded,
-      'time': '5 Dk',
-      'steps': [
-        '1. Önce ellerini 20 saniye sabunla güzelce yıka.',
-        '2. İki dilim ekmeği tabağa koy.',
-        '3. Üzerine beyaz peynir veya kaşar dilimi yerleştir.',
-        '4. İstersen domates veya salatalık dilimi ekle.',
-        '5. Diğer ekmeği üstüne kapat. Afiyet olsun!',
-      ],
-    },
-    {
-      'title': 'Vitaminli Meyve Tabağı',
-      'icon': Icons.apple_rounded,
-      'time': '7 Dk',
-      'steps': [
-        '1. Ellerini yıka.',
-        '2. Elma ve muzu temiz suyla iyice yıka.',
-        '3. Muzu soyup dilimle (Gerekirse büyüğünden yardım iste).',
-        '4. Renkli meyveleri tabağına diz ve keyifle ye.',
-      ],
-    },
-    {
-      'title': 'Ilık Ballı Süt',
-      'icon': Icons.local_cafe_rounded,
-      'time': '4 Dk',
-      'steps': [
-        '1. Temiz bir bardağa süt doldur.',
-        '2. Isıtmak için mutlaka anne veya babandan yardım iste.',
-        '3. Bir kaşık bal ekle ve yavaşça karıştır.',
-      ],
-    },
-  ];
+  late List<KitchenRecipe> _recipes;
+  String _selectedCategory = 'Tümü';
 
   final List<Map<String, dynamic>> _rules = [
     {
-      'rule': 'Sıcak Ocağa ve Fırına Dokunma!',
+      'rule': 'Sıcak Ocağa ve Fırına Asla Dokunma!',
       'icon': Icons.local_fire_department_rounded,
       'color': Colors.red,
-      'desc': 'Ocak çok sıcaktır ve elini yakabilir.',
+      'desc': 'Ocak ve fırın çok sıcaktır, elini yakabilir. Her zaman fırın eldiveni kullan veya büyüğünden yardım al.',
     },
     {
-      'rule': 'Keskin Bıçakları Tek Başına Kullanma!',
+      'rule': 'Keskin Bıçakları Dikkatli ve Yardım Alarak Kullan!',
       'icon': Icons.warning_amber_rounded,
       'color': Colors.orange,
-      'desc': 'Bir şey keserken her zaman büyüklerinden yardım iste.',
+      'desc': 'Bıçakla bir şey doğrarken parmaklarını içe doğru kıvır ve gerekirse bir yetişkinden destek iste.',
     },
     {
-      'rule': 'Islak Elle Elektrik Prizine Dokunma!',
+      'rule': 'Islak Elle Elektrikli Mutfak Aletlerine Dokunma!',
       'icon': Icons.electric_bolt_rounded,
       'color': Colors.amber.shade800,
-      'desc': 'Elektrik aletlerini kullanmadan önce ellerini kurula.',
+      'desc': 'Blender, mikser veya tost makinesi fişini takmadan önce mutlaka ellerini kurula.',
     },
     {
-      'rule': 'Yemekten Önce Mutlaka Ellerini Yıka!',
+      'rule': 'Yemek Hazırlamadan Önce Ellerini Yıka!',
       'icon': Icons.wash_rounded,
       'color': Colors.blue,
-      'desc': 'Mikroplardan korunmak için sabunla yıka.',
+      'desc': 'Mikroplardan korunmak ve hijyen için ellerini en az 20 saniye sabunla güzelce yıka.',
+    },
+    {
+      'rule': 'Dökülen Sıvıları Hemen Sil ve Kurula!',
+      'icon': Icons.cleaning_services_rounded,
+      'color': Colors.teal,
+      'desc': 'Yere su veya yağ damladığında kayıp düşmemek için hemen bez veya havlu ile kurula.',
     },
   ];
 
@@ -80,6 +56,7 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTi
   void initState() {
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
+    _recipes = LezzetPlusRecipes.getRecipes();
     _initTts();
   }
 
@@ -96,52 +73,6 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTi
     } catch (_) {}
   }
 
-  void _showRecipeDetails(Map<String, dynamic> recipe) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Row(
-          children: [
-            Icon(recipe['icon'] as IconData, color: Colors.orange, size: 28),
-            const SizedBox(width: 8),
-            Expanded(child: Text(recipe['title'] as String, style: const TextStyle(fontSize: 18))),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              ...((recipe['steps'] as List<String>).map((s) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.check_circle_outline_rounded, color: Colors.green, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(s, style: const TextStyle(fontSize: 14))),
-                    IconButton(
-                      icon: const Icon(Icons.volume_up_rounded, size: 18, color: AppColors.buttonIndigo),
-                      onPressed: () => _speak(s),
-                    ),
-                  ],
-                ),
-              ))),
-            ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.buttonIndigo, foregroundColor: Colors.white),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Tamam'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void dispose() {
     _tabCtrl.dispose();
@@ -149,10 +80,17 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTi
     super.dispose();
   }
 
+  List<KitchenRecipe> get _filteredRecipes {
+    if (_selectedCategory == 'Tümü') return _recipes;
+    return _recipes.where((r) => r.category == _selectedCategory).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final categories = ['Tümü', 'Çorbalar', 'Makarnalar', 'Salatalar', 'Pratik Lezzetler'];
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8FA),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -162,19 +100,27 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTi
         ),
         title: const Row(
           children: [
-            Icon(Icons.restaurant_menu_rounded, color: Colors.orange),
+            Icon(Icons.restaurant_rounded, color: Colors.orange, size: 26),
             SizedBox(width: 8),
-            Text('Mutfak & Tarifler', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
+            Text(
+              'Mutfağım & Lezzet +1',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
           ],
         ),
         bottom: TabBar(
           controller: _tabCtrl,
           labelColor: Colors.orange.shade800,
-          unselectedLabelColor: Colors.grey,
+          unselectedLabelColor: Colors.grey.shade600,
           indicatorColor: Colors.orange.shade800,
           indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           tabs: const [
-            Tab(icon: Icon(Icons.menu_book_rounded), text: 'Kolay Tarifler'),
+            Tab(icon: Icon(Icons.menu_book_rounded), text: 'Lezzet +1 Kitabı'),
             Tab(icon: Icon(Icons.health_and_safety_rounded), text: 'Mutfak Güvenliği'),
           ],
         ),
@@ -182,64 +128,292 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTi
       body: TabBarView(
         controller: _tabCtrl,
         children: [
-          // Tarifler Listesi
-          ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _recipes.length,
-            itemBuilder: (context, index) {
-              final r = _recipes[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.all(16),
+          // ─── TAB 1: LEZZET +1 TARİFLERİ ───
+          ListView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+            children: [
+              // Tanıtım Afişi
+              Container(
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    colors: [Colors.orange.shade600, Colors.amber.shade600],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(22),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+                      color: Colors.orange.withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(r['icon'] as IconData, color: Colors.orange.shade800, size: 30),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.25),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.auto_stories_rounded, color: Colors.white, size: 24),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Lezzet +1 Mutfak Atölyesi',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
+                              ),
+                              Text(
+                                'Down Sendromu Derneği & Hilton İş Birliği',
+                                style: TextStyle(color: Colors.white70, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Tüm materyal ve malzemeleri kontrol listesinden işaretle, adım adım kronometre desteğiyle kendi yemeğini keyifle hazırla!',
+                      style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Kategori Filtre Butonları
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: categories.map((cat) {
+                    final isSelected = _selectedCategory == cat;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(cat),
+                        selected: isSelected,
+                        selectedColor: Colors.orange.shade700,
+                        backgroundColor: Colors.white,
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                        side: BorderSide(
+                          color: isSelected ? Colors.transparent : Colors.grey.shade300,
+                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() => _selectedCategory = cat);
+                          }
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Tarif Kartları Listesi
+              ..._filteredRecipes.map((recipe) {
+                final checkedCount = recipe.ingredients.where((i) => i.isChecked).length +
+                    recipe.tools.where((t) => t.isChecked).length;
+                final totalItems = recipe.ingredients.length + recipe.tools.length;
+                final isDone = totalItems > 0 && checkedCount == totalItems;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: recipe.themeColor.withValues(alpha: 0.25),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => KitchenRecipeDetailScreen(recipe: recipe),
+                        ),
+                      ).then((_) => setState(() {}));
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(r['title'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 4),
-                          Text('Süre: ${r['time']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 58,
+                                height: 58,
+                                decoration: BoxDecoration(
+                                  color: recipe.themeColor.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: recipe.coverImagePath != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: Image.asset(
+                                          recipe.coverImagePath!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              Icon(recipe.icon, color: recipe.themeColor, size: 30),
+                                        ),
+                                      )
+                                    : Icon(recipe.icon, color: recipe.themeColor, size: 30),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: recipe.themeColor.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        recipe.category,
+                                        style: TextStyle(
+                                          color: recipe.themeColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      recipe.title,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      recipe.subtitle,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 12,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          const Divider(height: 1),
+                          const SizedBox(height: 12),
+
+                          // Bilgi Etiketleri ve Kontrol Listesi Durumu
+                          Row(
+                            children: [
+                              _buildMiniBadge(Icons.people_outline_rounded, recipe.portions),
+                              const SizedBox(width: 8),
+                              _buildMiniBadge(Icons.timer_outlined, recipe.prepTime),
+                              const SizedBox(width: 8),
+                              _buildMiniBadge(Icons.format_list_numbered_rounded, '${recipe.steps.length} Adım'),
+                              const Spacer(),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isDone ? Colors.green.shade50 : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isDone ? Icons.check_circle_rounded : Icons.checklist_rounded,
+                                      color: isDone ? Colors.green : Colors.grey.shade700,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$checkedCount/$totalItems',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDone ? Colors.green : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Başla Butonu
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: recipe.themeColor,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              icon: const Icon(Icons.soup_kitchen_rounded, size: 20),
+                              label: const Text(
+                                'Kontrol Listesi & Adımlar ▶',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => KitchenRecipeDetailScreen(recipe: recipe),
+                                  ),
+                                ).then((_) => setState(() {}));
+                              },
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange.shade600,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => _showRecipeDetails(r),
-                      child: const Text('Tarif'),
-                    ),
-                  ],
-                ),
-              );
-            },
+                  ),
+                );
+              }),
+            ],
           ),
 
-          // Güvenlik Kuralları Listesi
+          // ─── TAB 2: MUTFAK GÜVENLİĞİ ───
           ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: _rules.length,
@@ -264,11 +438,11 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTi
                 child: Row(
                   children: [
                     Container(
-                      width: 50,
-                      height: 50,
+                      width: 52,
+                      height: 52,
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Icon(rule['icon'] as IconData, color: color, size: 28),
                     ),
@@ -277,9 +451,15 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTi
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(rule['rule'] as String, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          Text(
+                            rule['rule'] as String,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
                           const SizedBox(height: 4),
-                          Text(rule['desc'] as String, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                          Text(
+                            rule['desc'] as String,
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 12, height: 1.3),
+                          ),
                         ],
                       ),
                     ),
@@ -291,6 +471,27 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen> with SingleTi
                 ),
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniBadge(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: Colors.grey.shade700),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
           ),
         ],
       ),
