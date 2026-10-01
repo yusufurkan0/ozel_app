@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../theme/app_theme.dart';
+import 'social_story_library_screen.dart';
 
 class GamesSocialStoriesScreen extends StatefulWidget {
   const GamesSocialStoriesScreen({super.key});
@@ -276,70 +277,8 @@ class _GamesSocialStoriesScreenState extends State<GamesSocialStoriesScreen>
       body: TabBarView(
         controller: _tabCtrl,
         children: [
-          // ─── 1. Sosyal Öyküler Listesi ───
-          ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: _stories.length,
-            itemBuilder: (context, index) {
-              final s = _stories[index];
-              final color = s['color'] as Color;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 14),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: color.withValues(alpha: 0.3)),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x080F172A),
-                      blurRadius: 8,
-                      offset: Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(s['icon'] as IconData, color: color, size: 28),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            s['title'] as String,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${(s['steps'] as List).length} Adımlı Görsel Rehber',
-                            style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: color,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => _openStory(s),
-                      child: const Text('Oku'),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
+          // ─── 1. Sosyal Öyküler Kütüphanesi (Kullanıcı İsteği: Boş Kütüphane, Kendi Fotoğrafları, Ses Kaydı, Yatay Büyüme) ───
+          const SocialStoryLibraryScreen(type: 'social_story', isEmbedded: true),
 
           // ─── 2. Eğitici Mini Oyunlar Listesi ───
           ListView.builder(

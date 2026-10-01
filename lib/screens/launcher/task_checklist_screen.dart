@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../theme/app_theme.dart';
+import 'social_story_library_screen.dart';
 
 class TaskChecklistScreen extends StatefulWidget {
   const TaskChecklistScreen({super.key});
@@ -9,8 +10,10 @@ class TaskChecklistScreen extends StatefulWidget {
   State<TaskChecklistScreen> createState() => _TaskChecklistScreenState();
 }
 
-class _TaskChecklistScreenState extends State<TaskChecklistScreen> {
+class _TaskChecklistScreenState extends State<TaskChecklistScreen>
+    with SingleTickerProviderStateMixin {
   final FlutterTts _tts = FlutterTts();
+  late TabController _tabCtrl;
 
   final List<Map<String, dynamic>> _tasks = [
     {
@@ -67,6 +70,7 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen> {
   @override
   void initState() {
     super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
     _initTts();
   }
 
@@ -108,17 +112,13 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen> {
         ),
         content: TextField(
           controller: titleCtrl,
-          decoration: InputDecoration(
-            hintText: 'Görev adı (Örn: Çantamı hazırla)',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          ),
           autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'Görev adı (Örn: Çantamı hazırlamak)',
+          ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('İptal'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
@@ -150,17 +150,13 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen> {
 
   @override
   void dispose() {
+    _tabCtrl.dispose();
     _tts.stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final completedCount = _tasks.where((t) => t['completed'] == true).length;
-    final totalCount = _tasks.length;
-    final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
-    final totalScore = _tasks.where((t) => t['completed'] == true).fold<int>(0, (sum, t) => sum + (t['points'] as int));
-
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FA),
       appBar: AppBar(
@@ -174,172 +170,222 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen> {
           children: [
             Icon(Icons.checklist_rounded, color: Colors.green),
             SizedBox(width: 8),
-            Text('Görev Listem', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
+            Text('Görev Listesi', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded, color: Colors.green, size: 28),
-            tooltip: 'Yeni Görev Ekle',
-            onPressed: _addNewTaskDialog,
-          ),
+        bottom: TabBar(
+          controller: _tabCtrl,
+          labelColor: Colors.green.shade800,
+          unselectedLabelColor: Colors.grey.shade600,
+          indicatorColor: Colors.green.shade700,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+          tabs: const [
+            Tab(icon: Icon(Icons.auto_stories_rounded), text: 'Görev Kitaplarım'),
+            Tab(icon: Icon(Icons.check_circle_outline_rounded), text: 'Hızlı Liste'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabCtrl,
+        children: [
+          // ─── 1. Görev Kitapları (Kullanıcı İsteği: "Sosyal öykülerdeki yapının aynısı kullanılacak") ───
+          const SocialStoryLibraryScreen(type: 'task_list', isEmbedded: true),
+
+          // ─── 2. Hızlı Görev Kontrol Listesi ───
+          _buildQuickChecklist(),
         ],
       ),
-      body: Column(
-        children: [
-          // İlerleme ve Yıldız Kartı
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.green.shade400, Colors.teal.shade500],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.green.withValues(alpha: 0.25),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+    );
+  }
+
+  Widget _buildQuickChecklist() {
+    final completedCount = _tasks.where((t) => t['completed'] == true).length;
+    final totalCount = _tasks.length;
+    final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
+    final totalScore = _tasks.where((t) => t['completed'] == true).fold<int>(0, (sum, t) => sum + (t['points'] as int));
+
+    return Column(
+      children: [
+        // İlerleme ve Yıldız Kartı
+        Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.green.shade400, Colors.teal.shade500],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            child: Row(
-              children: [
-                // İlerleme Yüzdesi
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.green.withValues(alpha: 0.25),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // İlerleme Yüzdesi
+              Container(
+                width: 58,
+                height: 58,
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '${(progress * 100).toInt()}%',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green.shade800),
                   ),
-                  child: Center(
-                    child: Text(
-                      '${(progress * 100).toInt()}%',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green.shade800),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$completedCount / $totalCount Görev Bitti',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 8,
+                        backgroundColor: Colors.white30,
+                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Puan Rozeti
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade400,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.star_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$totalScore',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Hızlı Görev Ekleme Butonu
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.green.shade700,
+                side: BorderSide(color: Colors.green.shade600),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Yeni Hızlı Görev Ekle', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: _addNewTaskDialog,
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        // Görevler Listesi
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            itemCount: _tasks.length,
+            itemBuilder: (context, index) {
+              final task = _tasks[index];
+              final completed = task['completed'] as bool;
+              final color = task['color'] as Color;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: completed ? Colors.green.shade300 : Colors.grey.shade200,
+                    width: completed ? 2 : 1,
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x060F172A),
+                      blurRadius: 8,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  leading: GestureDetector(
+                    onTap: () => _toggleTask(index),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: completed ? Colors.green.shade500 : color.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        completed ? Icons.check_rounded : (task['icon'] as IconData),
+                        color: completed ? Colors.white : color,
+                        size: 24,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  title: Text(
+                    task['title'] as String,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      decoration: completed ? TextDecoration.lineThrough : null,
+                      color: completed ? Colors.grey : AppColors.textPrimary,
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '$completedCount / $totalCount Görev Bitti',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                      IconButton(
+                        icon: const Icon(Icons.volume_up_rounded, color: AppColors.buttonIndigo),
+                        tooltip: 'Sesli Dinle',
+                        onPressed: () => _speak(task['title'] as String),
                       ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 8,
-                          backgroundColor: Colors.white24,
-                          color: Colors.amberAccent,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '⭐ Toplam $totalScore Puan Kazandın!',
-                        style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                      Checkbox(
+                        value: completed,
+                        activeColor: Colors.green,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        onChanged: (_) => _toggleTask(index),
                       ),
                     ],
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
-
-          // Görev Listesi
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _tasks.length,
-              itemBuilder: (context, index) {
-                final task = _tasks[index];
-                final isCompleted = task['completed'] as bool;
-                final color = task['color'] as Color;
-
-                return GestureDetector(
-                  onTap: () => _toggleTask(index),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isCompleted ? Colors.green.shade50 : Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: isCompleted ? Colors.green.shade300 : Colors.grey.shade200,
-                        width: isCompleted ? 1.5 : 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.03),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        // İkon
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: isCompleted ? Colors.green.shade100 : color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            task['icon'] as IconData,
-                            color: isCompleted ? Colors.green.shade700 : color,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        // Başlık & Puan
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                task['title'] as String,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: isCompleted ? Colors.green.shade900 : AppColors.textPrimary,
-                                  decoration: isCompleted ? TextDecoration.lineThrough : null,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '+${task['points']} Puan',
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Kontrol Kutucuğu
-                        Checkbox(
-                          value: isCompleted,
-                          activeColor: Colors.green,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          onChanged: (_) => _toggleTask(index),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

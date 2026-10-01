@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -267,6 +268,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
     await prefs.setString('child_diagnosis', _selectedDiagnosis);
     await prefs.setString('avatar', _selectedAvatar);
     await prefs.setBool('is_registered', true);
+
+    // Destek Kişileri (user_support_contacts) başlangıç kaydı
+    final existingContacts = prefs.getString('user_support_contacts');
+    if (existingContacts == null || existingContacts.isEmpty) {
+      final List<Map<String, dynamic>> defaultContacts = [
+        {
+          'name': parentName,
+          'role': 'Aile',
+          'phone': parentPhone,
+          'avatar': '👨‍👩‍👧',
+          'isJobCoach': false,
+        }
+      ];
+      if (altPhone.isNotEmpty) {
+        defaultContacts.add({
+          'name': '2. Destek Kişim',
+          'role': 'Aile',
+          'phone': altPhone,
+          'avatar': '👨‍👩‍👧',
+          'isJobCoach': false,
+        });
+      }
+      await prefs.setString('user_support_contacts', jsonEncode(defaultContacts));
+    }
 
     if (!mounted) return;
     final gameService = Provider.of<GameProgressService>(context, listen: false);
