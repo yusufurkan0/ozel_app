@@ -5,6 +5,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/inactivity_help_service.dart';
 import '../../theme/app_theme.dart';
 
+/// 💳 Kredi Kartı Harcaması Takip Ekranı
+/// - Aylık Limit & Ekstre Kesim ve Son Ödeme Tarihi Seçimi
+/// - Harcama tutarı ve günün tarihi (değiştirilebilir) girişi
+/// - Her harcama sonrası o ayki toplam harcama ve kalan limitin gösterilmesi
+/// - Ekstre kesim tarihinden sonraki harcamaların sonraki aya eklenmesi
+/// - Tüm limit, harcama ve kalan limitin görsel olarak azalan şekil olarak gösterilmesi
+/// - Ay başında / sıfırlamada "Kredi kartı borcunu ödedin mi?" kontrolü:
+///   * Evet: Limiti onayla ve baştan başlat
+///   * Hayır: Kaldığı yerden devam et ve "Borcunu ödemezsen kartın kapatılabilir" uyarısı ver.
 class CardBudgetScreen extends StatefulWidget {
   const CardBudgetScreen({super.key});
 
@@ -19,7 +28,11 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
   double _monthlyLimit = 2000.0;
   int _cutoffDay = 15; // Ayın 15'i
   int _dueDay = 25;    // Ayın 25'i
+  DateTime _cutoffDate = DateTime(DateTime.now().year, DateTime.now().month, 15);
+  DateTime _dueDate = DateTime(DateTime.now().year, DateTime.now().month, 25);
+
   double _carriedDebt = 0.0;
+  bool _unpaidWarningActive = false;
 
   // Harcama kayıtları: { 'title': String, 'amount': double, 'date': String, 'isNextMonth': bool }
   final List<Map<String, dynamic>> _transactions = [];
@@ -72,6 +85,14 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
     } catch (_) {}
   }
 
+  String _formatDate(DateTime dt) {
+    const months = [
+      'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+      'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+    ];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
+  }
+
   Future<void> _loadCardData() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -79,6 +100,23 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
       _cutoffDay = prefs.getInt('card_cutoff_day') ?? 15;
       _dueDay = prefs.getInt('card_due_day') ?? 25;
       _carriedDebt = prefs.getDouble('card_carried_debt') ?? 0.0;
+      _unpaidWarningActive = prefs.getBool('card_unpaid_warning') ?? false;
+
+      final savedCutoffIso = prefs.getString('card_cutoff_date');
+      if (savedCutoffIso != null) {
+        _cutoffDate = DateTime.tryParse(savedCutoffIso) ?? _cutoffDate;
+        _cutoffDay = _cutoffDate.day;
+      } else {
+        _cutoffDate = DateTime(DateTime.now().year, DateTime.now().month, _cutoffDay);
+      }
+
+      final savedDueIso = prefs.getString('card_due_date');
+      if (savedDueIso != null) {
+        _dueDate = DateTime.tryParse(savedDueIso) ?? _dueDate;
+        _dueDay = _dueDate.day;
+      } else {
+        _dueDate = DateTime(DateTime.now().year, DateTime.now().month, _dueDay);
+      }
 
       final savedTxStr = prefs.getString('card_transactions_v2');
       if (savedTxStr != null && savedTxStr.isNotEmpty) {
@@ -102,12 +140,15 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
       await prefs.setDouble('card_monthly_limit', _monthlyLimit);
       await prefs.setInt('card_cutoff_day', _cutoffDay);
       await prefs.setInt('card_due_day', _dueDay);
+      await prefs.setString('card_cutoff_date', _cutoffDate.toIso8601String());
+      await prefs.setString('card_due_date', _dueDate.toIso8601String());
       await prefs.setDouble('card_carried_debt', _carriedDebt);
+      await prefs.setBool('card_unpaid_warning', _unpaidWarningActive);
       await prefs.setString('card_transactions_v2', jsonEncode(_transactions));
     } catch (_) {}
   }
 
-  /// Her ay başında veya sıfırlamada Borç Ödeme Kontrolü
+  /// 🔄 Her ay başında veya sıfırlamada Borç Ödeme Kontrolü
   void _promptMonthlyResetCheck() {
     _speak('Kredi kartı borcunu ödedin mi?');
 
@@ -116,6 +157,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        actionsOverflowButtonSpacing: 8,
         title: const Row(
           children: [
             Icon(Icons.credit_score_rounded, color: AppColors.buttonIndigo, size: 28),
@@ -128,7 +170,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Yeni aya başlamadan önce geçmiş ekstre borcunu kontrol edelim:',
+              'Her ay sıfırlanarak tekrar başlatılır. Başlatmadan önce kredi kartı borcunu kontrol edelim:',
               style: TextStyle(fontSize: 14, color: Color(0xFF475569)),
             ),
             const SizedBox(height: 12),
@@ -138,9 +180,21 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                 color: const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Text(
-                'Bu Ayki Toplam Borç: ${_currentMonthSpent.toInt()} TL',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E40AF)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Bu Ayki Toplam Borç: ₺${_currentMonthSpent.toInt()}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E40AF)),
+                  ),
+                  if (_carriedDebt > 0) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Devreden Geçmiş Borç: ₺${_carriedDebt.toInt()}',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFFDC2626)),
+                    ),
+                  ],
+                ],
               ),
             ),
             const SizedBox(height: 14),
@@ -151,12 +205,12 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
           ],
         ),
         actions: [
-          // Hayır derse
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               setState(() {
                 _carriedDebt += _currentMonthSpent;
+                _unpaidWarningActive = true;
                 _transactions.clear();
               });
               _saveCardData();
@@ -165,25 +219,25 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
             },
             child: const Text('Hayır, Ödemedim', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
           ),
-
-          // Evet derse
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF16A34A),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
             onPressed: () {
               Navigator.pop(ctx);
               _confirmRestartLimit();
             },
-            child: const Text('Evet, Ödedim ✅'),
+            child: const Text('Evet, Ödedim ✅', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
+  /// ⚠️ Hayır dediğinde gelen Kapatılma Uyarısı
   void _showUnpaidDebtWarningDialog() {
     showDialog(
       context: context,
@@ -193,7 +247,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
           children: [
             Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 30),
             SizedBox(width: 8),
-            Text('Önemli Borç Uyarısı!'),
+            Expanded(child: Text('Önemli Borç Uyarısı!')),
           ],
         ),
         content: Container(
@@ -203,7 +257,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
             borderRadius: BorderRadius.circular(14),
           ),
           child: const Text(
-            '⚠️ DİKKAT: Kredi kartı borcunu ödemezsen kartın banka tarafından kullanıma kapatılabilir!\n\nBorcun yeni aya devredildi ve mevcut limitinden düşüldü.',
+            '⚠️ UYARI: Kredi kartı borcunu ödemezsen kartın kapatılabilir!\n\nBorcun yeni aya devredildi ve mevcut limitinden düşülerek kaldığı yerden başlatıldı.',
             style: TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.bold, fontSize: 13.5, height: 1.4),
           ),
         ),
@@ -218,6 +272,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
     );
   }
 
+  /// ✅ Evet dediğinde Limit Onayı ve Baştan Başlatma
   void _confirmRestartLimit() {
     _speak('Aylık limitin ${_monthlyLimit.toInt()} lira mı? Onaylıyor musun?');
 
@@ -225,31 +280,74 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Text('Limit Onayı'),
-        content: Text('Aylık kart limitin ${_monthlyLimit.toInt()} TL olarak baştan başlatılsın mı?'),
+        actionsOverflowButtonSpacing: 8,
+        title: const Row(
+          children: [
+            Icon(Icons.verified_rounded, color: Color(0xFF16A34A), size: 26),
+            SizedBox(width: 8),
+            Expanded(child: Text('Aylık Limit Onayı')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Aylık kart limitin ₺${_monthlyLimit.toInt()} mi?',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Onaylarsanız kart limitiniz baştan başlatılacak ve harcama sayacı sıfırlanacaktır.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('İptal'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showMonthlyEntrySettingsDialog();
+            },
+            child: const Text('Limiti Değiştir'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
             onPressed: () {
               Navigator.pop(ctx);
               setState(() {
-                _transactions.clear();
+                // Sonraki aya yazılmış harcamalar varsa bu aya aktarılır
+                for (var tx in _transactions) {
+                  tx['isNextMonth'] = false;
+                }
+                _transactions.removeWhere((tx) => tx['isNextMonth'] == true);
                 _carriedDebt = 0.0;
+                _unpaidWarningActive = false;
               });
               _saveCardData();
               _speak('Harika! Limitiniz sıfırlandı ve ${_monthlyLimit.toInt()} lira olarak baştan başladı.');
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Limitiniz sıfırlandı ve ₺${_monthlyLimit.toInt()} olarak baştan başladı! 🎉'),
+                  backgroundColor: const Color(0xFF16A34A),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             },
-            child: const Text('Evet, Başlat'),
+            child: const Text('Evet, Limiti Başlat ✅', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
 
+  /// ➕ Kredi Kartı Harcaması Ekle
   void _showAddExpenseDialog() {
     final titleCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
@@ -258,136 +356,250 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Row(
-            children: [
-              Icon(Icons.add_card_rounded, color: AppColors.buttonIndigo),
-              SizedBox(width: 8),
-              Text('Kart Harcaması Ekle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+        builder: (context, setModalState) {
+          final isNextMonth = selectedDate.day > _cutoffDay || selectedDate.isAfter(_cutoffDate);
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+            title: const Row(
               children: [
-                TextField(
-                  controller: titleCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Harcama Açıklaması',
-                    hintText: 'Örn: Market, Ulaşım, Kitap',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: amountCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Harcama Tutarı (TL)',
-                    hintText: 'Örn: 150',
-                    prefixText: '₺ ',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // Tarih Seçimi (Günün tarihi varsayılan, değiştirilebilir)
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today_rounded, size: 20, color: Color(0xFF64748B)),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Tarih: ${selectedDate.day}.${selectedDate.month}.${selectedDate.year}',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                Icon(Icons.add_card_rounded, color: AppColors.buttonIndigo),
+                SizedBox(width: 8),
+                Expanded(child: Text('Kart Harcaması Ekle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Harcama Açıklaması',
+                      hintText: 'Örn: Market, Ulaşım, Kitap',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setModalState(() => selectedDate = picked);
-                        }
-                      },
-                      child: const Text('Değiştir'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Harcama Tutarı (TL) *',
+                      hintText: 'Örn: 150',
+                      prefixText: '₺ ',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 14),
 
-                // Ekstre Kesim Tarihi Kontrolü Bilgisi
-                if (selectedDate.day > _cutoffDay)
+                  // Tarih Seçimi (Günün tarihi varsayılan, değiştirilebilir)
                   Container(
-                    margin: const EdgeInsets.only(top: 8),
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
+                      color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 20),
-                        const SizedBox(width: 8),
+                        const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF475569)),
+                        const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Seçilen tarih ayın ${_cutoffDay}. gününden sonra olduğu için bir sonraki ayın ekstresine eklenecektir.',
-                            style: const TextStyle(fontSize: 12, color: Color(0xFF92400E)),
+                            'Tarih: ${selectedDate.day}.${selectedDate.month}.${selectedDate.year}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: selectedDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2035),
+                            );
+                            if (picked != null) {
+                              setModalState(() => selectedDate = picked);
+                            }
+                          },
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            child: Text(
+                              'Değiştir',
+                              style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold, fontSize: 12.5),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.buttonIndigo,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              onPressed: () {
-                final title = titleCtrl.text.trim().isEmpty ? 'Kart Harcaması' : titleCtrl.text.trim();
-                final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
-                final isNextMonth = selectedDate.day > _cutoffDay;
 
-                if (amount > 0) {
-                  setState(() {
-                    _transactions.insert(0, {
-                      'title': title,
-                      'amount': amount,
-                      'date': '${selectedDate.day}.${selectedDate.month}.${selectedDate.year}',
-                      'isNextMonth': isNextMonth,
-                    });
-                  });
-                  _saveCardData();
-                  Navigator.pop(ctx);
-                  _speak('$title için ${amount.toInt()} lira harcama kaydedildi. Kalan limitiniz ${_remainingLimit.toInt()} lira.');
-                }
-              },
-              child: const Text('Kaydet'),
+                  // Ekstre Kesim Tarihinden Sonraki Harcama Rozeti / Uyarısı
+                  if (isNextMonth)
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF3C7),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Seçilen tarih ayın ${_cutoffDay}. gününden sonra olduğu için bu harcama bir sonraki ayın ekstresine eklenecektir.',
+                              style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.buttonIndigo,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  final title = titleCtrl.text.trim().isEmpty ? 'Kart Harcaması' : titleCtrl.text.trim();
+                  final amount = double.tryParse(amountCtrl.text.trim()) ?? 0.0;
+
+                  if (amount > 0) {
+                    setState(() {
+                      _transactions.insert(0, {
+                        'title': title,
+                        'amount': amount,
+                        'date': '${selectedDate.day}.${selectedDate.month}.${selectedDate.year}',
+                        'isNextMonth': isNextMonth,
+                      });
+                    });
+                    _saveCardData();
+                    Navigator.pop(ctx);
+
+                    // Harcama sonrasında toplam harcamayı ve kalan limiti göster
+                    _showPostExpenseSummaryDialog(
+                      title: title,
+                      amount: amount,
+                      isNextMonth: isNextMonth,
+                    );
+                  }
+                },
+                child: const Text('Kaydet'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  void _showSettingsDialog() {
+  /// 📊 Her Harcama Girişinden Sonra Toplam Harcama & Kalan Limit Gösterimi
+  void _showPostExpenseSummaryDialog({
+    required String title,
+    required double amount,
+    required bool isNextMonth,
+  }) {
+    _speak('Harcama kaydedildi. Bu ayki toplam harcamanız ${_currentMonthSpent.toInt()} lira, limitinizden kalan tutar ${_remainingLimit.toInt()} lira.');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 28),
+            SizedBox(width: 8),
+            Expanded(child: Text('Harcama Kaydedildi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Girilen Harcama: ₺${amount.toInt()} ($title)',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text('Bu Ayki Toplam Harcama:', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                      ),
+                      Text(
+                        '₺${_currentMonthSpent.toInt()}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFDC2626)),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text('Limitinden Kalan Tutar:', style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                      ),
+                      Text(
+                        '₺${_remainingLimit.toInt()}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF16A34A)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isNextMonth
+                  ? 'ℹ️ Bu harcama ekstre kesim tarihinden sonraki bir tarihe ait olduğu için bir sonraki ayın ekstresine eklendi.'
+                  : '💡 Bir sonraki harcama kaydı için aylık limitiniz kalan limit (₺${_remainingLimit.toInt()}) olarak güncellendi.',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E3A8A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tamam'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ⚙️ Aylık Giriş & Ekstre Tarihleri Seçimi (Aylık Limit, Kesim Tarihi, Son Ödeme Tarihi)
+  void _showMonthlyEntrySettingsDialog() {
     final limitCtrl = TextEditingController(text: _monthlyLimit.toInt().toString());
-    int tempCutoff = _cutoffDay;
-    int tempDue = _dueDay;
+    DateTime tempCutoff = _cutoffDate;
+    DateTime tempDue = _dueDate;
 
     showDialog(
       context: context,
@@ -396,9 +608,9 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: const Row(
             children: [
-              Icon(Icons.settings_rounded, color: AppColors.buttonIndigo),
+              Icon(Icons.calendar_month_rounded, color: AppColors.buttonIndigo),
               SizedBox(width: 8),
-              Text('Kart & Ekstre Ayarları'),
+              Expanded(child: Text('Aylık Giriş & Kart Ayarları', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17))),
             ],
           ),
           content: SingleChildScrollView(
@@ -406,38 +618,98 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text('1. Aylık Kart Limiti', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                const SizedBox(height: 6),
                 TextField(
                   controller: limitCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'Aylık Toplam Limit (TL)',
+                    labelText: 'Aylık Limit (TL)',
                     prefixText: '₺ ',
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
-                const SizedBox(height: 14),
-                Text('Ekstre Kesim Günü: Ayın $tempCutoff. günü', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                Slider(
-                  value: tempCutoff.toDouble(),
-                  min: 1,
-                  max: 28,
-                  divisions: 27,
-                  activeColor: AppColors.buttonIndigo,
-                  label: '$tempCutoff',
-                  onChanged: (val) => setModalState(() => tempCutoff = val.toInt()),
+                const SizedBox(height: 16),
+
+                // 2. Bir Sonraki Ekstre Kesim Tarihi
+                const Text('2. Bir Sonraki Ekstre Kesim Tarihi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: tempCutoff,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) {
+                      setModalState(() => tempCutoff = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.date_range_rounded, color: AppColors.buttonIndigo, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _formatDate(tempCutoff),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ),
+                        const Text('Değiştir', style: TextStyle(color: AppColors.buttonIndigo, fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Text('Son Ödeme Günü: Ayın $tempDue. günü', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
-                Slider(
-                  value: tempDue.toDouble(),
-                  min: 1,
-                  max: 28,
-                  divisions: 27,
-                  activeColor: const Color(0xFF16A34A),
-                  label: '$tempDue',
-                  onChanged: (val) => setModalState(() => tempDue = val.toInt()),
+                const SizedBox(height: 16),
+
+                // 3. Ekstre Son Ödeme Tarihi
+                const Text('3. Ekstre Son Ödeme Tarihi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                const SizedBox(height: 6),
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: tempDue,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2035),
+                    );
+                    if (picked != null) {
+                      setModalState(() => tempDue = picked);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFCBD5E1)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.alarm_on_rounded, color: Color(0xFF16A34A), size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _formatDate(tempDue),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                        ),
+                        const Text('Değiştir', style: TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.bold, fontSize: 12)),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -450,12 +722,14 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                 final newLimit = double.tryParse(limitCtrl.text.trim()) ?? _monthlyLimit;
                 setState(() {
                   _monthlyLimit = newLimit;
-                  _cutoffDay = tempCutoff;
-                  _dueDay = tempDue;
+                  _cutoffDate = tempCutoff;
+                  _cutoffDay = tempCutoff.day;
+                  _dueDate = tempDue;
+                  _dueDay = tempDue.day;
                 });
                 _saveCardData();
                 Navigator.pop(ctx);
-                _speak('Kart ayarları güncellendi.');
+                _speak('Aylık limit ve ekstre tarihleri güncellendi.');
               },
               child: const Text('Kaydet'),
             ),
@@ -480,9 +754,9 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
 
     // Kalan bakiyeye göre dinamik renk (Yeşil -> Turuncu -> Kırmızı)
     Color statusColor = const Color(0xFF16A34A);
-    if (remainingRatio < 0.25) {
+    if (remainingRatio < 0.20) {
       statusColor = const Color(0xFFEF4444);
-    } else if (remainingRatio < 0.5) {
+    } else if (remainingRatio < 0.50) {
       statusColor = const Color(0xFFF59E0B);
     }
 
@@ -511,13 +785,13 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_rounded, color: Color(0xFF64748B)),
-            tooltip: 'Kart Ayarları',
-            onPressed: _showSettingsDialog,
+            icon: const Icon(Icons.calendar_month_rounded, color: Color(0xFF2563EB)),
+            tooltip: 'Aylık Giriş & Tarihler',
+            onPressed: _showMonthlyEntrySettingsDialog,
           ),
           IconButton(
             icon: const Icon(Icons.restart_alt_rounded, color: Color(0xFF7C3AED)),
-            tooltip: 'Yeni Ayı Başlat / Borç Kontrolü',
+            tooltip: 'Ayı Sıfırla & Borç Kontrolü',
             onPressed: _promptMonthlyResetCheck,
           ),
         ],
@@ -526,6 +800,50 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                // ─── SABİT BORÇ VE KAPATILMA UYARI BANDI ───
+                if (_unpaidWarningActive || _carriedDebt > 0)
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEE2E2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: Color(0xFFDC2626), size: 28),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '⚠️ UYARI: Kredi kartı borcunu ödemezsen kartın kapatılabilir!',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF991B1B)),
+                              ),
+                              if (_carriedDebt > 0)
+                                Text(
+                                  'Devreden Geçmiş Borç: ₺${_carriedDebt.toInt()}',
+                                  style: const TextStyle(fontSize: 11.5, color: Color(0xFFB91C1C), fontWeight: FontWeight.w600),
+                                ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          onPressed: _promptMonthlyResetCheck,
+                          child: const Text('Ödedim', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ),
+
                 // ─── GÖRSEL OLARAK AZALAN LİMİT KARTI ───
                 Container(
                   width: double.infinity,
@@ -534,7 +852,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        const Color(0xFF1E293B),
+                        const Color(0xFF0F172A),
                         statusColor.withValues(alpha: 0.85),
                       ],
                       begin: Alignment.topLeft,
@@ -543,8 +861,8 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: statusColor.withValues(alpha: 0.3),
-                        blurRadius: 14,
+                        color: statusColor.withValues(alpha: 0.35),
+                        blurRadius: 16,
                         offset: const Offset(0, 6),
                       ),
                     ],
@@ -552,29 +870,49 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Üst Tarihler Barı
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.contactless_rounded, color: Colors.white70, size: 20),
-                              SizedBox(width: 6),
-                              Text('KART LİMİTİ', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8)),
-                            ],
+                          Flexible(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.contactless_rounded, color: Colors.white70, size: 18),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                                    child: Text(
+                                      'Kesim: ${_cutoffDay}. Gün',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
-                            child: Text(
-                              'Kesim: $_cutoffDay',
-                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                              child: Text(
+                                'Son Ödeme: ${_dueDay}. Gün',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 14),
 
+                      // Büyük Kalan Limit Tutarı
                       Text(
                         '₺ ${_remainingLimit.toStringAsFixed(0)}',
                         style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w900),
@@ -585,48 +923,74 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Azalan Dinamik Şekil (Progress Bar)
+                      // 📉 GÖRSEL OLARAK AZALAN ŞEKİL (DİNAMİK ÇUBUK)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Kalan Limit Oranı',
+                            style: TextStyle(color: Colors.white70, fontSize: 11.5, fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            '%${(remainingRatio * 100).toInt()} Kalan',
+                            style: TextStyle(color: statusColor.computeLuminance() > 0.5 ? Colors.white : Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: LinearProgressIndicator(
                           value: remainingRatio,
-                          minHeight: 12,
-                          backgroundColor: Colors.white.withValues(alpha: 0.2),
+                          minHeight: 14,
+                          backgroundColor: Colors.white.withValues(alpha: 0.25),
                           color: statusColor,
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 8),
 
-                      // İstatistik Satırı
+                      // 10 Dilimli Azalan Görsel Segment Blokları
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              'Limit: ₺${_monthlyLimit.toInt()}',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                        children: List.generate(10, (index) {
+                          final blockThreshold = (index + 1) / 10.0;
+                          final isFilled = remainingRatio >= blockThreshold;
+                          return Expanded(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: isFilled ? statusColor : Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(3),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              'Harcama: ₺${_currentMonthSpent.toInt()}',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11.5),
-                            ),
-                          ),
-                        ],
+                          );
+                        }),
                       ),
-                      if (_carriedDebt > 0) ...[
-                        const SizedBox(height: 6),
-                        Text('Devreden Geçmiş Borç: ₺${_carriedDebt.toInt()}', style: const TextStyle(color: Color(0xFFFCA5A5), fontWeight: FontWeight.bold, fontSize: 11.5)),
-                      ],
+                      const SizedBox(height: 16),
+
+                      // 3'lü Özet İstatistik Blokları
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildCardMiniStat('Tüm Limit', '₺${_monthlyLimit.toInt()}', Colors.white70),
+                            Container(width: 1, height: 24, color: Colors.white24),
+                            _buildCardMiniStat('Bu Ay Harcanan', '₺${_currentMonthSpent.toInt()}', const Color(0xFFFCA5A5)),
+                            Container(width: 1, height: 24, color: Colors.white24),
+                            _buildCardMiniStat('Kalan', '₺${_remainingLimit.toInt()}', const Color(0xFF86EFAC)),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
 
-                // Harcama Ekle & Yeni Ay Butonları
+                // ─── HARCAMA EKLE & AYI SIFIRLA BUTONLARI ───
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -661,7 +1025,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // Harcama Geçmişi Listesi
+                // ─── HARCAMA GEÇMİŞİ LİSTESİ ───
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                   child: Row(
@@ -671,9 +1035,16 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                       const Text('Kayıtlı Harcamalar:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF475569))),
                       const Spacer(),
                       if (_nextMonthSpent > 0)
-                        Text(
-                          'Sonraki Ay: ${_nextMonthSpent.toInt()} TL',
-                          style: const TextStyle(fontSize: 11.5, color: Color(0xFFD97706), fontWeight: FontWeight.bold),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            'Sonraki Ay: ₺${_nextMonthSpent.toInt()}',
+                            style: const TextStyle(fontSize: 11.5, color: Color(0xFFD97706), fontWeight: FontWeight.bold),
+                          ),
                         ),
                     ],
                   ),
@@ -741,6 +1112,19 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildCardMiniStat(String label, String value, Color valueColor) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 10)),
+          const SizedBox(height: 2),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: valueColor, fontWeight: FontWeight.bold, fontSize: 12)),
+        ],
+      ),
     );
   }
 }

@@ -151,6 +151,93 @@ void main() {
       expect(find.text('Kullanılabilir Kalan Limit'), findsOneWidget);
       expect(find.text('Harcama Ekle'), findsOneWidget);
       expect(find.text('Ayı Sıfırla'), findsOneWidget);
+      expect(find.text('Tüm Limit'), findsOneWidget);
+      expect(find.text('Bu Ay Harcanan'), findsOneWidget);
+      expect(find.text('Kalan'), findsOneWidget);
+    });
+
+    testWidgets('Kredi Kartı Takibi: Ayı Sıfırlama akışında Borç Ödeme sorusu ve Evet/Hayır mantığı çalışmalı', (tester) async {
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MaterialApp(home: CardBudgetScreen()));
+      await tester.pumpAndSettle();
+
+      // Ayı Sıfırla butonuna bas
+      await tester.tap(find.text('Ayı Sıfırla'));
+      await tester.pumpAndSettle();
+
+      // Borç sorusu gelmeli
+      expect(find.text('Kredi Kartı Borç Kontrolü'), findsOneWidget);
+      expect(find.text('Kredi kartı borcunu bankaya ödedin mi?'), findsOneWidget);
+      expect(find.text('Hayır, Ödemedim'), findsOneWidget);
+      expect(find.text('Evet, Ödedim ✅'), findsOneWidget);
+
+      // Hayır'a basınca borç uyarısı gelmeli
+      await tester.tap(find.text('Hayır, Ödemedim'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Önemli Borç Uyarısı!'), findsOneWidget);
+      expect(find.textContaining('kartın kapatılabilir'), findsWidgets);
+
+      await tester.tap(find.text('Anladım'));
+      await tester.pumpAndSettle();
+
+      // Şimdi Evet'i test edelim
+      await tester.tap(find.text('Ayı Sıfırla'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Evet, Ödedim ✅'));
+      await tester.pumpAndSettle();
+
+      // Limit onay sorusu gelmeli: "Aylık kart limitin ₺... mi?"
+      expect(find.text('Aylık Limit Onayı'), findsOneWidget);
+      expect(find.textContaining('Aylık kart limitin'), findsOneWidget);
+      expect(find.text('Evet, Limiti Başlat ✅'), findsOneWidget);
+
+      await tester.tap(find.text('Evet, Limiti Başlat ✅'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Kredi Kartı Takibi: Harcama ekleme, günün tarihi ve harcama sonrası özet diyaloğu çalışmalı', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MaterialApp(home: CardBudgetScreen()));
+      await tester.pumpAndSettle();
+
+      // Harcama Ekle'ye bas
+      await tester.tap(find.text('Harcama Ekle'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kart Harcaması Ekle'), findsOneWidget);
+      // Günün tarihi varsayılan gelmeli
+      final now = DateTime.now();
+      expect(find.text('Tarih: ${now.day}.${now.month}.${now.year}'), findsOneWidget);
+      expect(find.text('Değiştir'), findsOneWidget);
+
+      // Harcama bilgisi gir
+      await tester.enterText(find.widgetWithText(TextField, 'Harcama Açıklaması'), 'Kitap ve Defter');
+      await tester.enterText(find.widgetWithText(TextField, 'Harcama Tutarı (TL) *'), '250');
+      await tester.pumpAndSettle();
+
+      // Kaydet butonuna bas
+      await tester.tap(find.text('Kaydet'));
+      await tester.pumpAndSettle();
+
+      // Her girişten sonra O ayki toplam harcamasını ve Limitinden kalan tutarı gösteren dialog açılmalı
+      expect(find.text('Harcama Kaydedildi'), findsOneWidget);
+      expect(find.text('Bu Ayki Toplam Harcama:'), findsOneWidget);
+      expect(find.text('Limitinden Kalan Tutar:'), findsOneWidget);
+
+      await tester.tap(find.text('Tamam'));
+      await tester.pumpAndSettle();
+
+      // Ana ekranda harcama listelenmeli
+      expect(find.text('Kitap ve Defter'), findsOneWidget);
+      expect(find.text('-₺250'), findsOneWidget);
     });
 
     testWidgets('Destek Kişilerim ekranı Aile ve İş Koçu rollerini desteklemeli', (tester) async {
