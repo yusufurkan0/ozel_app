@@ -41,9 +41,16 @@ class HomeScreen extends StatelessWidget {
             Text(game.avatar, style: const TextStyle(fontSize: 48)),
             const SizedBox(height: 6),
             Text(
-              game.childName.isNotEmpty ? game.childName : 'Ali',
+              game.childName.isNotEmpty ? game.childName : 'Öğrenci Profilim',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
             ),
+            if (game.childName.isEmpty) ...[
+              const SizedBox(height: 2),
+              const Text(
+                '(İsim tanımlamak için aşağıdaki butona dokunun)',
+                style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+              ),
+            ],
             const SizedBox(height: 4),
             Text('⭐ Günlük İlerleme: ${game.todaySteps.length}/${game.dailyGoal} Görev', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),

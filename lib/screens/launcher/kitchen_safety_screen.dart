@@ -87,7 +87,14 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen>
 
   @override
   Widget build(BuildContext context) {
-    final categories = ['Tümü', 'Çorbalar', 'Makarnalar', 'Salatalar', 'Pratik Lezzetler'];
+    final categories = [
+      'Tümü',
+      'Çorbalar',
+      'Salatalar',
+      'Makarnalar',
+      'Sandviçler & Burgerler',
+      'Tatlılar & Hamur İşleri',
+    ];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),

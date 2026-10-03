@@ -81,6 +81,82 @@ class OcrTranslationService {
     }
   }
 
+  /// Market fişleri için konumsal (Bounding Box) hizalamalı metin tanıma.
+  /// Sol sütundaki metin (örn. TOPLAM) ile sağ sütundaki fiyatı (*427,42)
+  /// dikey koordinat yakınlığına göre aynı satırda birleştirir.
+  Future<String> recognizeReceiptText(String imagePath) async {
+    if (imagePath.isEmpty) return '';
+
+    if (kIsWeb) {
+      return await recognizeWebText(imagePath);
+    }
+
+    try {
+      final file = File(imagePath);
+      if (!await file.exists()) {
+        debugPrint('Receipt OCR: Dosya bulunamadı: $imagePath');
+        return '';
+      }
+
+      final inputImage = InputImage.fromFilePath(imagePath);
+      final textRecognizer =
+          TextRecognizer(script: TextRecognitionScript.latin);
+      final RecognizedText recognizedText =
+          await textRecognizer.processImage(inputImage);
+      await textRecognizer.close();
+
+      // Tüm satırları kutularıyla topla
+      final allLines = <TextLine>[];
+      for (final block in recognizedText.blocks) {
+        allLines.addAll(block.lines);
+      }
+
+      if (allLines.isEmpty) {
+        return recognizedText.text.trim();
+      }
+
+      // Satırları Y eksenine (üstten alta) göre sırala
+      allLines.sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
+
+      // Benzer dikey hizada (Y ekseninde) olan satırları grupla ve soldan sağa birleştir
+      final mergedRows = <String>[];
+      final visited = <TextLine>{};
+
+      for (int i = 0; i < allLines.length; i++) {
+        final current = allLines[i];
+        if (visited.contains(current)) continue;
+
+        final rowGroup = <TextLine>[current];
+        visited.add(current);
+
+        final currentY = current.boundingBox.center.dy;
+        final currentH = current.boundingBox.height;
+        final yTolerance = (currentH * 0.75).clamp(8.0, 30.0);
+
+        for (int j = i + 1; j < allLines.length; j++) {
+          final other = allLines[j];
+          if (visited.contains(other)) continue;
+
+          final otherY = other.boundingBox.center.dy;
+          if ((otherY - currentY).abs() <= yTolerance) {
+            rowGroup.add(other);
+            visited.add(other);
+          }
+        }
+
+        // Aynı yatay gruptakileri X ekseninde soldan sağa diz
+        rowGroup.sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left));
+        mergedRows.add(rowGroup.map((l) => l.text.trim()).join('   '));
+      }
+
+      final structuredText = mergedRows.join('\n');
+      return '$structuredText\n---\n${recognizedText.text.trim()}';
+    } catch (e) {
+      debugPrint('Receipt OCR hatası: $e');
+      return await recognizeText(imagePath);
+    }
+  }
+
   /// Tanınan metni Makaton sembol kartlarına çevirir.
   List<MakatonItem> translateTextToMakaton(
     String text,

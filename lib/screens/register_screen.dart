@@ -49,6 +49,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _medicalNotesController = TextEditingController();
 
+  // Destek Kişileri (İş Koçu & Aile)
+  final List<Map<String, dynamic>> _supportContacts = [];
+  final TextEditingController _newContactNameCtrl = TextEditingController();
+  final TextEditingController _newContactPhoneCtrl = TextEditingController();
+  String _selectedContactRole = 'İş Koçu'; // 'İş Koçu', 'Aile', 'Öğretmen', 'Diğer'
+
   // Öğrenci kaydederken tek seferde Veli hesabı da açma seçeneği
   bool _createDualParentAccount = false;
   final TextEditingController _dualParentUsernameCtrl = TextEditingController();
@@ -128,6 +134,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (_avatars.contains(avatar)) {
         _selectedAvatar = avatar;
       }
+
+      final savedContactsStr = prefs.getString('user_support_contacts');
+      if (savedContactsStr != null && savedContactsStr.isNotEmpty) {
+        final decoded = jsonDecode(savedContactsStr) as List;
+        _supportContacts.clear();
+        for (final item in decoded) {
+          _supportContacts.add(Map<String, dynamic>.from(item as Map));
+        }
+      }
     } catch (_) {}
     if (mounted) setState(() => _isLoading = false);
   }
@@ -146,7 +161,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _medicalNotesController.dispose();
     _dualParentUsernameCtrl.dispose();
     _dualParentPasswordCtrl.dispose();
+    _newContactNameCtrl.dispose();
+    _newContactPhoneCtrl.dispose();
     super.dispose();
+  }
+
+  void _addSupportContact() {
+    final name = _newContactNameCtrl.text.trim();
+    final phone = _newContactPhoneCtrl.text.trim();
+
+    if (name.isEmpty) {
+      _showError('Lütfen destek kişisinin adını yazınız.');
+      return;
+    }
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    if (cleanPhone.length < 10) {
+      _showError('Lütfen geçerli bir telefon numarası giriniz (en az 10-11 hane).');
+      return;
+    }
+
+    final isJobCoach = _selectedContactRole == 'İş Koçu';
+    final avatar = isJobCoach
+        ? '💼'
+        : (_selectedContactRole == 'Öğretmen' ? '🧑‍🏫' : '👨‍👩‍👧');
+
+    setState(() {
+      _supportContacts.add({
+        'name': name,
+        'role': _selectedContactRole,
+        'phone': phone,
+        'avatar': avatar,
+        'isJobCoach': isJobCoach,
+      });
+      _newContactNameCtrl.clear();
+      _newContactPhoneCtrl.clear();
+      _errorMessage = '';
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$name ($_selectedContactRole) destek kişilerinize eklendi! ✨'),
+        backgroundColor: AppColors.positiveGreen,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _removeSupportContact(int index) {
+    if (index >= 0 && index < _supportContacts.length) {
+      final name = _supportContacts[index]['name'] ?? 'Kişi';
+      setState(() {
+        _supportContacts.removeAt(index);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$name destek kişileri listesinden çıkarıldı.'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   void _showError(String msg) {
@@ -323,20 +396,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
     await prefs.setString('avatar', _selectedAvatar);
     await prefs.setBool('is_registered', true);
 
-    // Destek Kişileri (user_support_contacts) başlangıç kaydı
-    final existingContacts = prefs.getString('user_support_contacts');
-    if (existingContacts == null || existingContacts.isEmpty) {
-      final List<Map<String, dynamic>> defaultContacts = [
-        {
-          'name': parentName,
-          'role': 'Aile',
-          'phone': parentPhone,
-          'avatar': '👨‍👩‍👧',
-          'isJobCoach': false,
-        }
-      ];
-      if (altPhone.isNotEmpty) {
-        defaultContacts.add({
+    // Destek Kişileri (user_support_contacts) kaydı
+    final List<Map<String, dynamic>> finalContacts = List.from(_supportContacts);
+    final cleanParentPhone = parentPhone.replaceAll(RegExp(r'\D'), '');
+    final hasParent = finalContacts.any((c) =>
+        (c['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '') == cleanParentPhone);
+    if (!hasParent) {
+      finalContacts.insert(0, {
+        'name': parentName,
+        'role': 'Aile',
+        'phone': parentPhone,
+        'avatar': '👨‍👩‍👧',
+        'isJobCoach': false,
+      });
+    }
+    if (altPhone.isNotEmpty) {
+      final cleanAlt = altPhone.replaceAll(RegExp(r'\D'), '');
+      final hasAlt = finalContacts.any((c) =>
+          (c['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '') == cleanAlt);
+      if (!hasAlt) {
+        finalContacts.add({
           'name': '2. Destek Kişim',
           'role': 'Aile',
           'phone': altPhone,
@@ -344,8 +423,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'isJobCoach': false,
         });
       }
-      await prefs.setString('user_support_contacts', jsonEncode(defaultContacts));
     }
+    await prefs.setString('user_support_contacts', jsonEncode(finalContacts));
 
     if (!mounted) return;
     final gameService = Provider.of<GameProgressService>(context, listen: false);
@@ -425,22 +504,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     await prefs.setString('avatar', _selectedAvatar);
     await prefs.setBool('is_registered', true);
 
-    // Destek kişileri rehberinde Ebeveyn kaydını senkronize et
+    // Destek kişileri rehberinde Ebeveyn kaydını senkronize et ve kaydet
     try {
-      final contactsStr = prefs.getString('user_support_contacts');
-      List<Map<String, dynamic>> contacts = [];
-      if (contactsStr != null && contactsStr.isNotEmpty) {
-        final decoded = jsonDecode(contactsStr) as List;
-        for (final item in decoded) {
-          contacts.add(Map<String, dynamic>.from(item as Map));
-        }
-      }
-      final parentIdx = contacts.indexWhere((c) => (c['role'] ?? '').toString().toLowerCase() == 'aile');
+      final List<Map<String, dynamic>> finalContacts = List.from(_supportContacts);
+      final cleanParentPhone = parentPhone.replaceAll(RegExp(r'\D'), '');
+      final parentIdx = finalContacts.indexWhere((c) =>
+          (c['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '') == cleanParentPhone ||
+          (c['role'] ?? '').toString().toLowerCase() == 'aile');
       if (parentIdx >= 0) {
-        contacts[parentIdx]['name'] = parentName;
-        contacts[parentIdx]['phone'] = parentPhone;
+        finalContacts[parentIdx]['name'] = parentName;
+        finalContacts[parentIdx]['phone'] = parentPhone;
       } else {
-        contacts.insert(0, {
+        finalContacts.insert(0, {
           'name': parentName,
           'role': 'Aile',
           'phone': parentPhone,
@@ -448,7 +523,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'isJobCoach': false,
         });
       }
-      await prefs.setString('user_support_contacts', jsonEncode(contacts));
+      await prefs.setString('user_support_contacts', jsonEncode(finalContacts));
     } catch (_) {}
 
     if (mounted) {
@@ -902,7 +977,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 20),
 
                   if (widget.isEditing) ...[
-                    // 3. BÖLÜM: DESTEK KİŞİLERİ REHBERİ (Hızlı Erişim)
+                    // DESTEK KİŞİLERİ REHBERİ (Hızlı Erişim & Test Uyumluluğu)
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -943,13 +1018,273 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(builder: (_) => const SupportContactsScreen()),
-                              );
+                              ).then((_) => _loadExistingData());
                             },
                             child: const Text('Rehber 📖', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // ─── 3. BÖLÜM: DESTEK KİŞİLERİ (İŞ KOÇU & AİLE REHBERİ) ───
+                  _buildSectionHeader(
+                    '👥 3. Destek Kişilerini Seç & Bilgilerini Gir',
+                    '1 dk beklenildiğinde (yemek, rutin, takvim vb.) "Yardım ister misin?" uyarısında aranacak veya WhatsApp atılacak kişiler',
+                  ),
+                  const SizedBox(height: 10),
+
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: Neu.elevated(radius: 20, blur: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Bilgilendirme Kutusu
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFF93C5FD)),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('💡', style: TextStyle(fontSize: 20)),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Adımlarda 1 dakika beklenildiğinde sistem sesli ve görsel "Yardım ister misin?" uyarısı verir.\n'
+                                  '• Aileden biri seçilirse telefonla arar (tel:)\n'
+                                  '• İş Koçu seçilirse WhatsApp mesajı (wa.me) açar',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1.35,
+                                    color: Color(0xFF1E3A8A),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Ekli Destek Kişileri Başlığı
+                        Text(
+                          'Kayıtlı Destek Kişileri (${_supportContacts.length})',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 8),
+
+                        if (_supportContacts.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: const Text(
+                              'ℹ️ Henüz özel bir iş koçu veya ek destek kişisi eklenmedi. Yukarıdaki Ebeveyn numaranız otomatik olarak ana Aile desteği olacaktır. Aşağıdan hemen İş Koçunuzu (WhatsApp) ekleyebilirsiniz.',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                          )
+                        else
+                          Column(
+                            children: _supportContacts.asMap().entries.map((entry) {
+                              final idx = entry.key;
+                              final c = entry.value;
+                              final role = (c['role'] ?? 'Aile').toString();
+                              final isJobCoach = role.toLowerCase().contains('koç') ||
+                                  role.toLowerCase().contains('koc') ||
+                                  c['isJobCoach'] == true;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isJobCoach ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isJobCoach ? const Color(0xFF86EFAC) : Colors.grey.shade300,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: isJobCoach ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          (c['avatar'] ?? (isJobCoach ? '💼' : '👨‍👩‍👧')).toString(),
+                                          style: const TextStyle(fontSize: 20),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  c['name'] ?? '',
+                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: isJobCoach ? const Color(0xFF16A34A) : AppColors.buttonIndigo,
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  isJobCoach ? '💼 İş Koçu (WP)' : '$role (Arama)',
+                                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            c['phone'] ?? '',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
+                                      tooltip: 'Sil',
+                                      onPressed: () => _removeSupportContact(idx),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        const SizedBox(height: 16),
+
+                        // Yeni Destek Kişisi Ekleme Formu
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFCBD5E1)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '➕ Destek Kişisi Seç & Ekle',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                              ),
+                              const SizedBox(height: 8),
+
+                              const Text('Kişinin Rolü:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
+                              const SizedBox(height: 6),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 6,
+                                children: [
+                                  ChoiceChip(
+                                    label: const Text('💼 İş Koçu (WhatsApp)'),
+                                    selected: _selectedContactRole == 'İş Koçu',
+                                    selectedColor: const Color(0xFF86EFAC),
+                                    onSelected: (val) {
+                                      if (val) setState(() => _selectedContactRole = 'İş Koçu');
+                                    },
+                                  ),
+                                  ChoiceChip(
+                                    label: const Text('👨‍👩‍👧 Aile (Arama)'),
+                                    selected: _selectedContactRole == 'Aile',
+                                    selectedColor: const Color(0xFFBFDBFE),
+                                    onSelected: (val) {
+                                      if (val) setState(() => _selectedContactRole = 'Aile');
+                                    },
+                                  ),
+                                  ChoiceChip(
+                                    label: const Text('🧑‍🏫 Öğretmen (Arama)'),
+                                    selected: _selectedContactRole == 'Öğretmen',
+                                    selectedColor: const Color(0xFFFED7AA),
+                                    onSelected: (val) {
+                                      if (val) setState(() => _selectedContactRole = 'Öğretmen');
+                                    },
+                                  ),
+                                  ChoiceChip(
+                                    label: const Text('🌟 Diğer'),
+                                    selected: _selectedContactRole == 'Diğer',
+                                    selectedColor: const Color(0xFFE2E8F0),
+                                    onSelected: (val) {
+                                      if (val) setState(() => _selectedContactRole = 'Diğer');
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              _buildTextField(
+                                controller: _newContactNameCtrl,
+                                label: 'Destek Kişisi Adı Soyadı',
+                                hint: _selectedContactRole == 'İş Koçu' ? 'Örn: Mehmet Koç (İş Koçum)' : 'Örn: Fatma Teyze',
+                                icon: Icons.badge_rounded,
+                              ),
+                              const SizedBox(height: 10),
+
+                              _buildTextField(
+                                controller: _newContactPhoneCtrl,
+                                label: 'Telefon Numarası (11 Hane)',
+                                hint: 'Örn: 05321234567',
+                                icon: Icons.phone_rounded,
+                                keyboardType: TextInputType.phone,
+                                maxLength: 11,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(11),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _selectedContactRole == 'İş Koçu' ? const Color(0xFF16A34A) : AppColors.buttonIndigo,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                  ),
+                                  icon: const Icon(Icons.person_add_rounded, size: 18),
+                                  label: Text(
+                                    '+ Bu Destek Kişisini Ekle (${_selectedContactRole == 'İş Koçu' ? 'WhatsApp' : 'Telefon'})',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                  onPressed: _addSupportContact,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  if (widget.isEditing) ...[
+                    // Düzenleme modunda ek rehber butonu
                   ] else ...[
                     // 3. BÖLÜM: OTOMATİK EBEVEYN HESABI OLUŞTURMA (Opsiyonel Kolaylık)
                     Container(
@@ -1089,12 +1424,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
           children: [
             Icon(icon, size: 18, color: isSel ? Colors.white : AppColors.textPrimary),
             const SizedBox(width: 6),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isSel ? Colors.white : AppColors.textPrimary,
+            Flexible(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isSel ? Colors.white : AppColors.textPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

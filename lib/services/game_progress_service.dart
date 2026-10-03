@@ -360,7 +360,10 @@ class GameProgressService extends ChangeNotifier {
 
   Future<void> loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    _childName = prefs.getString('child_name') ?? '';
+    _childName = prefs.getString('child_name') ??
+        prefs.getString('sos_child_name') ??
+        prefs.getString('user_emergency_name') ??
+        '';
     _avatar = prefs.getString('avatar') ?? '🐻';
     _birthDate = prefs.getString('birth_date') ?? '';
     _height = prefs.getString('child_height') ?? '';

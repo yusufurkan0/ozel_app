@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../models/kitchen_recipe.dart';
+import '../../services/inactivity_help_service.dart';
 import '../../theme/app_theme.dart';
 
 class CookingStepByStepScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class CookingStepByStepScreen extends StatefulWidget {
 class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   late int _currentStepIndex;
   final FlutterTts _tts = FlutterTts();
+  late InactivityHelpService _inactivityHelp;
   bool _autoTts = true;
   bool _isSpeaking = false;
 
@@ -36,8 +38,12 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
     super.initState();
     _currentStepIndex = widget.initialStep.clamp(0, widget.recipe.steps.length - 1);
     _initTts();
+    _inactivityHelp = InactivityHelpService(timeoutDuration: const Duration(seconds: 60));
     _setupStepTimer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _inactivityHelp.start(context);
+      }
       if (_autoTts) {
         _speakCurrentStep();
       }
@@ -73,6 +79,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   }
 
   void _startTimer() {
+    _inactivityHelp.reset(context);
     if (_timerRemainingSeconds <= 0) return;
     _stepTimer?.cancel();
     setState(() {
@@ -102,6 +109,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   }
 
   void _pauseTimer() {
+    _inactivityHelp.reset(context);
     _stepTimer?.cancel();
     setState(() {
       _isTimerRunning = false;
@@ -109,6 +117,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   }
 
   void _resetTimer() {
+    _inactivityHelp.reset(context);
     _stepTimer?.cancel();
     final step = widget.recipe.steps[_currentStepIndex];
     setState(() {
@@ -119,6 +128,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   }
 
   void _addTimerTime(int seconds) {
+    _inactivityHelp.reset(context);
     setState(() {
       _timerRemainingSeconds += seconds;
       _timerTotalSeconds += seconds;
@@ -195,6 +205,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   }
 
   void _nextStep() {
+    _inactivityHelp.reset(context);
     _stopTts();
     _stepTimer?.cancel();
     if (_currentStepIndex < widget.recipe.steps.length - 1) {
@@ -211,6 +222,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   }
 
   void _prevStep() {
+    _inactivityHelp.reset(context);
     _stopTts();
     _stepTimer?.cancel();
     if (_currentStepIndex > 0) {
@@ -382,6 +394,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
 
   @override
   void dispose() {
+    _inactivityHelp.stop();
     _stepTimer?.cancel();
     _tts.stop();
     super.dispose();
@@ -441,44 +454,50 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
           ),
         ),
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Üst Sayaç ve Bilgi Şeridi
-            Container(
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => _inactivityHelp.reset(context),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Üst Sayaç ve Bilgi Şeridi
+              Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               color: Colors.white,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: widget.recipe.themeColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.directions_walk_rounded, color: widget.recipe.themeColor, size: 18),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Adım ${_currentStepIndex + 1} / $totalSteps',
-                          style: TextStyle(
-                            color: widget.recipe.themeColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                  Flexible(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: widget.recipe.themeColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.directions_walk_rounded, color: widget.recipe.themeColor, size: 18),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Adım ${_currentStepIndex + 1} / $totalSteps',
+                              style: TextStyle(
+                                color: widget.recipe.themeColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                  Row(
-                    children: [
-                      Text(
-                        '%${(progress * 100).toInt()} Tamamlandı',
-                        style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600, fontSize: 13),
-                      ),
-                    ],
+                  const SizedBox(width: 8),
+                  Text(
+                    '%${(progress * 100).toInt()} Tamamlandı',
+                    style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                 ],
               ),
@@ -843,6 +862,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

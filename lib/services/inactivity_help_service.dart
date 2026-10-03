@@ -130,6 +130,19 @@ class InactivityHelpService {
           contacts.add(Map<String, dynamic>.from(item as Map));
         }
       }
+      if (contacts.isEmpty) {
+        final parentName = prefs.getString('sos_parent_name') ?? prefs.getString('user_emergency_name') ?? 'Ailem';
+        final parentPhone = prefs.getString('sos_parent_phone') ?? prefs.getString('user_emergency_phone');
+        if (parentPhone != null && parentPhone.isNotEmpty) {
+          contacts.add({
+            'name': parentName,
+            'role': 'Aile',
+            'phone': parentPhone,
+            'avatar': '👨‍👩‍👧',
+            'isJobCoach': false,
+          });
+        }
+      }
     } catch (_) {}
 
     if (!context.mounted) return;
@@ -168,8 +181,10 @@ class InactivityHelpService {
                       label: const Text('112 Acil Yardım Ara'),
                       onPressed: () async {
                         Navigator.pop(ctx);
-                        final uri = Uri.parse('tel:112');
-                        if (await canLaunchUrl(uri)) await launchUrl(uri);
+                        try {
+                          final uri = Uri.parse('tel:112');
+                          if (await canLaunchUrl(uri)) await launchUrl(uri);
+                        } catch (_) {}
                       },
                     ),
                   ],
@@ -200,17 +215,23 @@ class InactivityHelpService {
                       ),
                       onTap: () async {
                         Navigator.pop(ctx);
-                        if (isJobCoach) {
-                          _speak('$name iş koçuna WhatsApp mesajı gönderiliyor.');
-                          final clean = phone.replaceAll(RegExp(r'[^\d]'), '');
-                          final formatted = clean.startsWith('0') ? '9$clean' : (clean.startsWith('90') ? clean : '90$clean');
-                          final uri = Uri.parse('https://wa.me/$formatted?text=${Uri.encodeComponent('Merhaba $name, uygulamada desteğe ihtiyacım var.')}');
-                          if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        } else {
-                          _speak('$name aranıyor.');
-                          final uri = Uri.parse('tel:$phone');
-                          if (await canLaunchUrl(uri)) await launchUrl(uri);
-                        }
+                        try {
+                          if (isJobCoach) {
+                            _speak('$name iş koçuna WhatsApp mesajı gönderiliyor.');
+                            final clean = phone.replaceAll(RegExp(r'[^\d]'), '');
+                            final formatted = clean.startsWith('0') ? '9$clean' : (clean.startsWith('90') ? clean : '90$clean');
+                            final uri = Uri.parse('https://wa.me/$formatted?text=${Uri.encodeComponent('Merhaba $name, uygulamada desteğe ihtiyacım var.')}');
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            }
+                          } else {
+                            _speak('$name aranıyor.');
+                            final uri = Uri.parse('tel:$phone');
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri);
+                            }
+                          }
+                        } catch (_) {}
                       },
                     );
                   },

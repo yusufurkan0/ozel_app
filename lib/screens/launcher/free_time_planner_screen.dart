@@ -125,6 +125,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
 
     if (missing.isNotEmpty) {
       _speak('Planı tamamlamak için henüz cevaplanmamış sorular var. Lütfen boş soruları tamamla.');
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Lütfen ${missing.join(", ")}. soruları da cevaplayın.'),
@@ -224,6 +225,12 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
               onPressed: () {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen())).then((_) => _loadInitialData());
               },
+            ),
+          if (_isWizardActive)
+            TextButton.icon(
+              icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
+              label: const Text('Bitir', style: TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.bold, fontSize: 15)),
+              onPressed: _finishWizard,
             ),
         ],
       ),
@@ -409,20 +416,32 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
-            child: const Center(
+            child: Center(
               child: Column(
                 children: [
-                  Icon(Icons.auto_stories_rounded, size: 48, color: Color(0xFFCBD5E1)),
-                  SizedBox(height: 12),
-                  Text(
+                  const Icon(Icons.auto_stories_rounded, size: 48, color: Color(0xFFCBD5E1)),
+                  const SizedBox(height: 12),
+                  const Text(
                     'Henüz Oluşturulmuş Kitapçık Yok',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF475569)),
                   ),
-                  SizedBox(height: 6),
-                  Text(
+                  const SizedBox(height: 6),
+                  const Text(
                     'Bir etkinlik seçip 13 soruyu cevaplayarak adım adım rehber kitapçığını oluşturabilirsin.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7C3AED),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    ),
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: const Text('Etkinlik Ekle & Planla', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5)),
+                    onPressed: _showAddNewActivityModal,
                   ),
                 ],
               ),
@@ -525,6 +544,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
   void _showAddNewActivityModal() {
     // 12 Serbest Zaman Etkinliği (SZ listesi)
     final szActivities = CalendarActivity.predefinedActivities.where((a) => a.isFreeTime).toList();
+    _speak('Hangi serbest zaman etkinliğini yapmak istiyorsun? Listeden bir etkinlik seç.');
 
     showModalBottomSheet(
       context: context,
@@ -578,7 +598,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                       trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF7C3AED)),
                       onTap: () {
                         Navigator.pop(ctx);
-                        _startPlanning(title: act.title, emoji: act.emoji, dayTitle: 'Haftalık Etkinlik');
+                        _showWeekSlotPickerModal(act);
                       },
                     ),
                   );
@@ -587,6 +607,485 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// İçinde bulunulan haftanın takvim slot seçicisi:
+  /// - Uygun boşluklar YEŞİL renktedir.
+  /// - Banner ve sesli uyarı: "Yeşil renkli yerlerden seç"
+  /// - Dolu veya yemek slotuna basılırsa: "Burası dolu, yeşillerden seç!" uyarısı.
+  /// - Yeşil slot seçilince takvim güncellenir ve 13 adımlık soru sihirbazına geçilir.
+  Future<void> _showWeekSlotPickerModal(CalendarActivity selectedActivity) async {
+    final currentMonday = RoutineCalendarService.getMondayOfWeek(DateTime.now());
+    final weekSchedule = await RoutineCalendarService.loadWeekSchedule(currentMonday);
+
+    // Varsayılan olarak bugünün gününü seçelim (0: Pazartesi .. 6: Pazar)
+    int selectedDayIndex = (DateTime.now().weekday - 1).clamp(0, 6);
+
+    _speak('Yeşil renkli yerlerden seç. Takvimde uygun boşluklar yeşil renkle gösterilmiştir.');
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final dayName = RoutineCalendarService.dayNames[selectedDayIndex];
+          final dayFormatted = RoutineCalendarService.formatDayHeader(currentMonday, selectedDayIndex);
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.88,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Tutamaç
+                Center(
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+
+                // Başlık & Kapat Butonu
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(selectedActivity.emoji, style: const TextStyle(fontSize: 22)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              selectedActivity.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B)),
+                            ),
+                            const Text(
+                              'Haftalık Takvimde Zaman Seç',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 🟢 ZORUNLU REHBER BANNER: "Yeşil renkli yerlerden seç"
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFDCFCE7),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF22C55E), width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF16A34A),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.touch_app_rounded, color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Yeşil renkli yerlerden seç',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: Color(0xFF15803D),
+                              ),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'Bu hafta için boş ve uygun zamanlar yeşil renktedir. Dolu yerler seçilemez.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF166534),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // GÜN SEÇİCİ (Haftanın 7 Günü - Sadece İçinde Bulunulan Hafta)
+                Container(
+                  height: 64,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    itemCount: 7,
+                    itemBuilder: (context, dIdx) {
+                      final isSelected = dIdx == selectedDayIndex;
+                      final dayDate = currentMonday.add(Duration(days: dIdx));
+                      final dayShortName = RoutineCalendarService.dayNames[dIdx].substring(0, 3);
+
+                      // Günün uygun boşluğu var mı kontrolü
+                      bool hasGreenSlot = false;
+                      for (int s in [0, 2, 4]) {
+                        if ((weekSchedule[dIdx]?[s]?.length ?? 0) < 3) {
+                          hasGreenSlot = true;
+                          break;
+                        }
+                      }
+
+                      return GestureDetector(
+                        onTap: () {
+                          setModalState(() {
+                            selectedDayIndex = dIdx;
+                          });
+                          _speak('${RoutineCalendarService.dayNames[dIdx]} günü seçildi.');
+                        },
+                        child: Container(
+                          width: 68,
+                          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isSelected ? const Color(0xFF7C3AED) : Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF7C3AED)
+                                  : (hasGreenSlot ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0)),
+                              width: isSelected ? 2 : 1.5,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(0xFF7C3AED).withValues(alpha: 0.3),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    )
+                                  ]
+                                : null,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                dayShortName,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: isSelected ? Colors.white : const Color(0xFF334155),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${dayDate.day}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: isSelected ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (hasGreenSlot ? const Color(0xFF22C55E) : const Color(0xFFEF4444)),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFF64748B)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          dayFormatted,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF475569)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        '🟢 Boş / Seçilebilir',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11.5, color: Color(0xFF15803D)),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 12),
+
+                // 5 ZAMAN DİLİMİ (SLOTLAR) LİSTESİ
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                    itemCount: 5,
+                    itemBuilder: (context, slotIdx) {
+                      final slotTitle = RoutineCalendarService.slotTitles[slotIdx];
+                      final isMeal = RoutineCalendarService.isMealSlot(slotIdx);
+                      final currentTasks = weekSchedule[selectedDayIndex]?[slotIdx] ?? [];
+                      final isFull = isMeal || currentTasks.length >= 3;
+
+                      if (!isFull) {
+                        // 🟢 YEŞİL RENKTE UYGUN BOŞLUK
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFF22C55E), width: 2.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () async {
+                              // YEŞİL SLOT SEÇİLDİ!
+                              // 1. Etkinliği takvime ekle
+                              weekSchedule[selectedDayIndex]![slotIdx]!.add(selectedActivity);
+                              await RoutineCalendarService.saveWeekSchedule(currentMonday, weekSchedule);
+
+                              // 2. Takvim senkronizasyonunu yenile
+                              await _loadInitialData();
+
+                              // 3. Modalı kapat
+                              if (mounted && Navigator.canPop(ctx)) {
+                                Navigator.pop(ctx);
+                              }
+
+                              // 4. Sesli ve görsel bildirim
+                              _speak('$dayName $slotTitle seçildi. Şimdi soruları cevaplayalım.');
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('🎉 ${selectedActivity.title}, $dayName takvimine eklendi!'),
+                                    backgroundColor: const Color(0xFF16A34A),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+
+                              // 5. 13 Adımlık Soru Sihirbazını Başlat
+                              final fullDayTitle = '${RoutineCalendarService.formatDayHeader(currentMonday, selectedDayIndex)} • $slotTitle';
+                              _startPlanning(
+                                title: selectedActivity.title,
+                                emoji: selectedActivity.emoji,
+                                dayTitle: fullDayTitle,
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF22C55E).withValues(alpha: 0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 28),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          slotTitle,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color: Color(0xFF14532D),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          currentTasks.isEmpty
+                                              ? '🟢 Tamamen Boş • Buraya Ekle'
+                                              : '🟢 ${3 - currentTasks.length} Boşluk Kaldı • Buraya Ekle',
+                                          style: const TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF15803D),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF16A34A),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Text(
+                                      'SEÇ 🟢',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      } else {
+                        // ⛔ DOLU / KİLİTLİ SLOT
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: () {
+                              // DOLU YERE BASILDI!
+                              _speak('Burası dolu, yeşillerden seç!');
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Row(
+                                    children: [
+                                      Icon(Icons.warning_amber_rounded, color: Colors.white),
+                                      SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          'Burası dolu, yeşillerden seç!',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: Color(0xFFEF4444),
+                                  duration: Duration(seconds: 3),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade200,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      isMeal ? Icons.lock_clock_rounded : Icons.do_not_disturb_on_rounded,
+                                      color: const Color(0xFF94A3B8),
+                                      size: 26,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          slotTitle,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14.5,
+                                            color: Color(0xFF64748B),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          isMeal ? '⛔ Yemek Zamanı (Sabit ve Kilitli)' : '⛔ Burası Dolu (3/3 Etkinlik)',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade200,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Text(
+                                      'DOLU ⛔',
+                                      style: TextStyle(
+                                        color: Color(0xFF64748B),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -615,9 +1114,14 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                 'Soru ${_currentStep + 1} / 13',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF7C3AED)),
               ),
-              Text(
-                '$_selectedActivityEmoji $_selectedActivityTitle',
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$_selectedActivityEmoji $_selectedActivityTitle',
+                  textAlign: TextAlign.end,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569)),
+                ),
               ),
             ],
           ),

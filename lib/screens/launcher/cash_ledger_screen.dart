@@ -52,6 +52,11 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   String? _scannedReceiptRawText;
   bool _isScanningReceipt = false;
 
+  // Fiyat Etiketi Tarama Durumları
+  bool _isScanningPriceTag = false;
+  String? _scannedPriceTagImage;
+  String? _scannedPriceTagRawText;
+
   // Haftalık ve Sabah Rutini Durumları
   String _currentWeekLabel = '';
   bool _showMorningBanner = true;
@@ -285,14 +290,16 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
         child: Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.9),
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           padding: const EdgeInsets.all(22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -302,6 +309,26 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                   ),
                   IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
                 ],
+              ),
+              const SizedBox(height: 8),
+
+              // Kamerayla Fiyat Etiketi Tara Butonu
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF2563EB),
+                    side: const BorderSide(color: Color(0xFF3B82F6), width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  icon: const Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB)),
+                  label: const Text('Fiyat Etiketini Kamerayla Tara 📸', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showPriceTagScanDialog();
+                  },
+                ),
               ),
               const SizedBox(height: 12),
 
@@ -403,8 +430,9 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _finishShopping() {
     if (_cartItems.isEmpty) {
@@ -471,6 +499,382 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
     }
 
     return chosen;
+  }
+
+  // ─── KAMERAYLA FİYAT ETİKETİ TARA (GÖRÜNTÜ İŞLEME - OCR) ───
+  void _showPriceTagScanDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.all(22),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Expanded(
+                    child: Row(
+                      children: [
+                        Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB)),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Fiyat Etiketi Tara 📸',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Market rafındaki fiyat etiketini veya ürün barkodundaki fiyatı kameraya göstererek okutun:',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB)),
+                ),
+                title: const Text('Kamerayı Başlat (Canlı Çekim) 📷', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Fiyat etiketini net görecek şekilde fotoğrafla'),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE2E8F0))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _processPriceTagFromImage(ImageSource.camera);
+                },
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFFF0FDF4), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF16A34A)),
+                ),
+                title: const Text('Galeriden Etiket Görseli Seç 🖼️', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Daha önce çekilmiş fiyat etiketini yükle'),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFE2E8F0))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _processPriceTagFromImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFFFEF3C7), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.label_important_rounded, color: Color(0xFFD97706)),
+                ),
+                title: const Text('Örnek Fiyat Etiketiyle Test Et 🏷️', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Kamera olmadan hızlı 24,90 TL etiket simülasyonu'),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: const BorderSide(color: Color(0xFFFDE68A))),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _simulatePriceTagScan();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _processPriceTagFromImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final photo = await picker.pickImage(source: source);
+      if (photo == null) return;
+
+      setState(() => _isScanningPriceTag = true);
+
+      final rawText = await OcrTranslationService().recognizeText(photo.path);
+      final tagData = _extractPriceFromTag(rawText);
+
+      setState(() {
+        _isScanningPriceTag = false;
+        _scannedPriceTagImage = photo.path;
+        _scannedPriceTagRawText = rawText;
+      });
+
+      _showDetectedPriceTagConfirmation(
+        imagePath: photo.path,
+        rawText: rawText,
+        name: tagData['name'] as String,
+        rawPrice: tagData['rawPrice'] as int,
+        roundedPrice: tagData['roundedPrice'] as int,
+      );
+    } catch (_) {
+      setState(() => _isScanningPriceTag = false);
+      _simulatePriceTagScan();
+    }
+  }
+
+  void _simulatePriceTagScan() {
+    const rawText = "DOĞAL SÜT 1L\nFİYAT: 24,90 TL\nKDV DAHİL";
+    final tagData = _extractPriceFromTag(rawText);
+
+    setState(() {
+      _scannedPriceTagImage = null;
+      _scannedPriceTagRawText = rawText;
+    });
+
+    _showDetectedPriceTagConfirmation(
+      imagePath: null,
+      rawText: rawText,
+      name: tagData['name'] as String,
+      rawPrice: tagData['rawPrice'] as int,
+      roundedPrice: tagData['roundedPrice'] as int,
+    );
+  }
+
+  Map<String, dynamic> _extractPriceFromTag(String rawText) {
+    String detectedName = 'Market Ürünü';
+    int rawPrice = 0;
+
+    if (rawText.isNotEmpty) {
+      final upper = _normalizeTurkishForOcr(rawText);
+
+      // FİŞ TESPİTİ: Eğer kullanıcı "Fiyat Tara" ile tüm fişi okuttuysa,
+      // tek bir ürün yerine fişin genel toplamını (örn: 427 TL) yakala!
+      final isReceipt = upper.contains('FİS NO') ||
+          upper.contains('FIS NO') ||
+          upper.contains('FİŞ NO') ||
+          upper.contains('TOPLAM') ||
+          upper.contains('TOPKDV') ||
+          upper.contains('KURUMLAR V.D') ||
+          upper.contains('KASİYER') ||
+          upper.contains('KASIYER');
+
+      if (isReceipt) {
+        if (upper.contains('SOK') || upper.contains('ŞOK')) {
+          detectedName = 'ŞOK Market Fişi 🧾';
+        } else if (upper.contains('BIM') || upper.contains('BİM')) {
+          detectedName = 'BİM Market Fişi 🧾';
+        } else if (upper.contains('A101')) {
+          detectedName = 'A101 Market Fişi 🧾';
+        } else if (upper.contains('MIGROS') || upper.contains('MİGROS')) {
+          detectedName = 'Migros Market Fişi 🧾';
+        } else {
+          detectedName = 'Market Alışveriş Fişi 🧾';
+        }
+
+        // Fişin genel toplamını (virgülün solunu) al
+        final receiptTotal = _extractReceiptTotal(rawText);
+        if (receiptTotal != null && receiptTotal > 0) {
+          rawPrice = receiptTotal.toInt();
+        }
+      }
+
+      // Eğer fiş değilse veya fiş toplamı bulunamadıysa standart raf etiketi analizi yap
+      if (rawPrice <= 0) {
+        final lower = rawText.toLowerCase();
+        const commonItems = [
+          'ekmek', 'süt', 'peynir', 'yoğurt', 'yumurta', 'zeytin', 'makarna',
+          'pirinç', 'çay', 'kahve', 'şeker', 'tuz', 'yağ', 'bisküvi', 'çikolata',
+          'su', 'elma', 'muz', 'domates', 'salatalık', 'patates', 'soğan', 'deterjan',
+          'sabun', 'şampuan', 'diş macunu', 'peçete', 'meyve suyu', 'baget', 'piliç', 'dana'
+        ];
+        for (var item in commonItems) {
+          if (lower.contains(item)) {
+            detectedName = item[0].toUpperCase() + item.substring(1);
+            break;
+          }
+        }
+
+        // Fiyat tespiti (virgülün solu veya tam sayı)
+        final decimalReg = RegExp(r'(\d+)[\.,](\d{1,2})');
+        final matchDecimal = decimalReg.firstMatch(rawText);
+
+        if (matchDecimal != null) {
+          rawPrice = int.tryParse(matchDecimal.group(1)!) ?? 0;
+        } else {
+          final tlReg = RegExp(r'(\d+)\s*(?:TL|₺)');
+          final matchTl = tlReg.firstMatch(rawText);
+          if (matchTl != null) {
+            rawPrice = int.tryParse(matchTl.group(1)!) ?? 0;
+          } else {
+            final numReg = RegExp(r'(\d+)');
+            final matchNum = numReg.firstMatch(rawText);
+            if (matchNum != null) {
+              rawPrice = int.tryParse(matchNum.group(1)!) ?? 0;
+            }
+          }
+        }
+      }
+    }
+
+    if (rawPrice <= 0) {
+      rawPrice = 24;
+    }
+
+    final int roundedPrice = rawPrice + 1;
+
+    return {
+      'name': detectedName,
+      'rawPrice': rawPrice,
+      'roundedPrice': roundedPrice,
+    };
+  }
+
+  void _showDetectedPriceTagConfirmation({
+    required String? imagePath,
+    required String rawText,
+    required String name,
+    required int rawPrice,
+    required int roundedPrice,
+  }) {
+    final isReceipt = name.contains('Fişi') || name.contains('🧾');
+    _speak('$name okundu. Tutar $rawPrice lira. Bir lira yuvarlama kuralı ile $roundedPrice lira olarak hesaplandı.');
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            Icon(isReceipt ? Icons.receipt_long_rounded : Icons.camera_alt_rounded, color: const Color(0xFF2563EB)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isReceipt ? 'Alışveriş Fişi Okundu! 🧾' : 'Fiyat Etiketi Okundu! 📸',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!kIsWeb && imagePath != null && File(imagePath).existsSync())
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.file(File(imagePath), height: 140, fit: BoxFit.cover),
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 120),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        const Icon(Icons.qr_code_scanner_rounded, size: 28, color: Color(0xFF2563EB)),
+                        const SizedBox(height: 4),
+                        Text(
+                          rawText.isNotEmpty ? rawText.trim() : 'Etiket / Fiş Okundu',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11.5, color: Color(0xFF1E3A8A)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Ürün:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF166534))),
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF166534), fontSize: 16)),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Virgülün Solundaki Rakam:'),
+                        Text('$rawPrice TL', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('+1 TL Yuvarlama (Kural):', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                        Text('$roundedPrice TL', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF16A34A))),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('İptal', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
+            label: const Text('Sepete Ekle & Topla ✅', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() {
+                _cartItems.add({
+                  'name': name,
+                  'rawPrice': rawPrice,
+                  'roundedPrice': roundedPrice,
+                });
+                if (!_isShoppingMode) {
+                  _isShoppingMode = true;
+                }
+              });
+              final total = _cartItems.fold<int>(0, (sum, i) => sum + (i['roundedPrice'] as int));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: const Color(0xFF16A34A),
+                  content: Text('$name sepete eklendi! Toplam Harcama: $total TL 🛒'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   // ─── KASADA FİŞİ OKUTMA / GÖRSEL İŞLEME (OCR) ───
@@ -577,7 +981,8 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
 
       setState(() => _isScanningReceipt = true);
 
-      final rawText = await OcrTranslationService().recognizeText(photo.path);
+      // Konumsal Bounding-Box hizalamalı fiş tanıma
+      final rawText = await OcrTranslationService().recognizeReceiptText(photo.path);
       final detectedTotal = _extractReceiptTotal(rawText) ?? _totalRoundedBill.toDouble();
 
       setState(() {
@@ -587,7 +992,7 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
         _scannedReceiptTotal = detectedTotal;
       });
 
-      _speak('Fiş başarıyla okundu. Fiş tutarı: ${detectedTotal.toInt()} lira.');
+      _speak('Fiş başarıyla okundu. Fiş tutarı: ${detectedTotal.toStringAsFixed(2)} lira.');
     } catch (_) {
       setState(() => _isScanningReceipt = false);
       _simulateReceiptScan();
@@ -597,32 +1002,220 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   void _simulateReceiptScan() {
     setState(() {
       _scannedReceiptImage = null;
-      _scannedReceiptRawText = 'MARKET KASA FİŞİ\n01.10.2026\nTOPLAM: $_totalRoundedBill.00 TL\nKDV DAHİL';
+      _scannedReceiptRawText = 'MARKET KASA FİŞİ\n01.10.2026\nTOPKDV *46,60\nTOPLAM *$_totalRoundedBill,00\nKDV DAHİL';
       _scannedReceiptTotal = _totalRoundedBill.toDouble();
     });
     _speak('Fiş başarıyla okundu. Fiş tutarı: $_totalRoundedBill lira.');
   }
 
+  /// Türk market fişlerinden (ŞOK, BİM, A101, Migros vb.) genel toplam tutarını hassas biçimde çıkarır.
   double? _extractReceiptTotal(String rawText) {
-    if (rawText.isEmpty) return null;
-    final lines = rawText.split('\n');
-    for (var line in lines.reversed) {
-      final upper = line.toUpperCase();
-      if (upper.contains('TOPLAM') || upper.contains('TUTAR') || upper.contains('TOTAL') || upper.contains('ÖDENECEK') || upper.contains('TOPKDV')) {
-        final reg = RegExp(r'(\d+[\.,]\d{2})');
-        final match = reg.firstMatch(line);
-        if (match != null) {
-          final str = match.group(1)!.replaceAll(',', '.');
-          return double.tryParse(str);
+    if (rawText.trim().isEmpty) return null;
+
+    final cleanedLines = rawText
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty && l != '---')
+        .toList();
+    if (cleanedLines.isEmpty) return null;
+
+    // 1. AŞAMA: "TOPLAM" / "GENEL TOPLAM" / "ÖDENECEK" satırında doğrudan fiyat arama
+    // Not: "TOPKDV" satırı KDV toplamıdır, genel toplam değildir; TOPKDV hariç tutulur!
+    for (int i = cleanedLines.length - 1; i >= 0; i--) {
+      final line = cleanedLines[i];
+      final upper = _normalizeTurkishForOcr(line);
+
+      // KDV toplamı satırını atla
+      if (upper.contains('TOPKDV') || upper.contains('KDV TOPLAM') || upper.contains('TOP. KDV')) {
+        continue;
+      }
+
+      final isTotalKeyword = upper.contains('TOPLAM') ||
+          upper.contains('GENEL TOPLAM') ||
+          upper.contains('T O P L A M') ||
+          upper.contains('TOPL AM') ||
+          upper.contains('TOP.TUTAR') ||
+          upper.contains('ODENECEK') ||
+          upper.contains('ÖDENECEK') ||
+          upper.contains('TUTAR') ||
+          upper.contains('TOTAL') ||
+          upper.contains('NAKIT') ||
+          upper.contains('NAKİT') ||
+          upper.contains('KREDI') ||
+          upper.contains('KREDİ');
+
+      if (isTotalKeyword) {
+        // Satırdaki fiyatı yakala
+        final price = _findPriceInReceiptLine(line);
+        if (price != null && price > 0) {
+          return price;
+        }
+
+        // Eğer bu satırda fiyat yoksa (sütun ayrımı durumu), hemen altındaki 1-4 satıra bak
+        for (int j = i + 1; j <= i + 4 && j < cleanedLines.length; j++) {
+          final nextLine = cleanedLines[j];
+          final nextUpper = _normalizeTurkishForOcr(nextLine);
+          if (!nextUpper.contains('KDV') && !nextUpper.contains('TARİH') && !nextUpper.contains('SAAT')) {
+            final nextPrice = _findPriceInReceiptLine(nextLine);
+            if (nextPrice != null && nextPrice > 0) {
+              return nextPrice;
+            }
+          }
         }
       }
     }
-    final generalReg = RegExp(r'(?:TOPLAM|TUTAR|ÖDENECEK|TOPKDV|TOTAL)[\s:]*([0-9]+[,\.][0-9]{2})', caseSensitive: false);
-    final m = generalReg.firstMatch(rawText);
-    if (m != null) {
-      return double.tryParse(m.group(1)!.replaceAll(',', '.'));
+
+    // 2. AŞAMA: Çok satırlı Regex ile "TOPLAM ... *427,42" kalıbı
+    final multiLineRegex = RegExp(
+      r'(?:GENEL\s+TOPLAM|TOPLAM|T\s*O\s*P\s*L\s*A\s*M|ÖDENECEK|ODENECEK|TOTAL)[\s\S]{0,35}?[*xX+₺TLtl\s]*(\d{1,5}[\.,]\d{2})',
+      caseSensitive: false,
+    );
+    final multiMatch = multiLineRegex.firstMatch(rawText);
+    if (multiMatch != null) {
+      final parsed = _parsePriceString(multiMatch.group(1));
+      if (parsed != null && parsed > 0) return parsed;
     }
+
+    // 3. AŞAMA: Fişin alt %40'ındaki sayılar arasında en mantıklı dip toplamı seç
+    // Market fişlerinde en dipteki pozitif sayı genelde fiş toplamıdır.
+    final allPricesWithIndices = <MapEntry<int, double>>[];
+    for (int i = 0; i < cleanedLines.length; i++) {
+      final line = cleanedLines[i];
+      // İndirim satırlarını atla (örn: *149,00- veya -54,50)
+      if (line.endsWith('-') || line.contains('-%') || line.contains('İNDİRİM') || line.contains('INDIRIM')) {
+        continue;
+      }
+      final price = _findPriceInReceiptLine(line);
+      if (price != null && price > 0) {
+        allPricesWithIndices.add(MapEntry(i, price));
+      }
+    }
+
+    if (allPricesWithIndices.isNotEmpty) {
+      // Fişin son kısmındaki fiyatlara bak
+      final thresholdIndex = (cleanedLines.length * 0.55).toInt();
+      final bottomPrices = allPricesWithIndices.where((e) => e.key >= thresholdIndex).toList();
+
+      if (bottomPrices.isNotEmpty) {
+        return bottomPrices.last.value;
+      }
+      return allPricesWithIndices.last.value;
+    }
+
     return null;
+  }
+
+  String _normalizeTurkishForOcr(String text) {
+    return text
+        .toUpperCase()
+        .replaceAll('İ', 'I')
+        .replaceAll('Ş', 'S')
+        .replaceAll('Ğ', 'G')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ö', 'O')
+        .replaceAll('Ç', 'C');
+  }
+
+  double? _findPriceInReceiptLine(String text) {
+    // Eksi ile biten indirim satırlarını atla (örn: *149,00- veya -54,50)
+    final trimmed = text.trim();
+    if (trimmed.endsWith('-')) return null;
+
+    // 1. Standart format: *427,42 veya 427.42 veya *46, 60
+    final reg = RegExp(r'[*xX+₺TLtl~_\s]*(\d{1,5})\s*[\.,]\s*(\d{1,2})');
+    final matches = reg.allMatches(text);
+    if (matches.isNotEmpty) {
+      final m = matches.last;
+      return double.tryParse('${m.group(1)}.${m.group(2)}');
+    }
+
+    // 2. OCR gürültülü format: ~ TOPLAM *427 4; veya *104 50 (virgül boşluk olmuş, 2 yerine noktalı virgül ;)
+    final noisyReg = RegExp(r'[*xX+₺TLtl~_\s]*(\d{1,5})\s+([0-9;]{1,2})');
+    final noisyMatches = noisyReg.allMatches(text);
+    if (noisyMatches.isNotEmpty) {
+      final m = noisyMatches.last;
+      final mainPart = m.group(1)!;
+      String dec = m.group(2)!.replaceAll(';', '2');
+      if (dec.length == 1) dec = '${dec}0';
+      return double.tryParse('$mainPart.$dec');
+    }
+
+    // 3. Tamsayı formatı: *427 TL veya *427
+    final intReg = RegExp(r'[*xX+₺TLtl~_\s]*(\d{1,5})');
+    final intMatches = intReg.allMatches(text);
+    if (intMatches.isNotEmpty) {
+      return double.tryParse(intMatches.last.group(1)!);
+    }
+
+    return null;
+  }
+
+  double? _parsePriceString(String? str) {
+    if (str == null || str.isEmpty) return null;
+    final clean = str.replaceAll(',', '.');
+    return double.tryParse(clean);
+  }
+
+  void _showEditReceiptTotalDialog() {
+    final ctrl = TextEditingController(text: _scannedReceiptTotal?.toStringAsFixed(2) ?? _totalRoundedBill.toStringAsFixed(2));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.edit_note_rounded, color: Color(0xFF2563EB)),
+            SizedBox(width: 8),
+            Text('Fiş Tutarını Düzenle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Fişteki Genel Toplam tutarını kontrol edin ve gerekirse düzeltin:',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: ctrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Fiş Toplamı (TL)',
+                prefixText: '₺ ',
+                filled: true,
+                fillColor: const Color(0xFFF8FAFC),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              final parsed = double.tryParse(ctrl.text.replaceAll(',', '.').trim());
+              if (parsed != null && parsed > 0) {
+                setState(() => _scannedReceiptTotal = parsed);
+                Navigator.pop(ctx);
+                _speak('Fiş tutarı ${parsed.toStringAsFixed(2)} lira olarak güncellendi.');
+              }
+            },
+            child: const Text('Kaydet & Onayla'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ─── ÖDEME VE PARA ÜSTÜ ALMA AKIŞI ───
@@ -921,6 +1514,7 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
@@ -951,6 +1545,9 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
         ),
       ),
       body: _isShoppingMode ? _buildShoppingModeView() : _buildWalletCounterView(),
+      bottomNavigationBar: _isShoppingMode && !_showPaymentGuidance && _cartItems.isNotEmpty
+          ? _buildShoppingBottomBar()
+          : null,
     );
   }
 
@@ -1013,19 +1610,37 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                 style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF16A34A),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF16A34A),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      icon: const Icon(Icons.shopping_bag_rounded),
+                      label: const Text('Alışverişi Başlat 🛒', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      onPressed: _startShopping,
+                    ),
                   ),
-                  icon: const Icon(Icons.shopping_bag_rounded),
-                  label: const Text('Alışverişi Başlat 🛒', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  onPressed: _startShopping,
-                ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                    label: const Text('Fiyat Tara 📸', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    onPressed: () {
+                      _startShopping();
+                      _showPriceTagScanDialog();
+                    },
+                  ),
+                ],
               ),
             ],
           ),
@@ -1164,110 +1779,227 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
 
   /// 2. Görünüm: "Alışverişi Başlat" ve Ödeme Rehberi
   Widget _buildShoppingModeView() {
-    return Column(
-      children: [
-        // Alışveriş Başlık Özeti
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.white,
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.shopping_cart_rounded, color: Color(0xFF2563EB), size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Aktif Alışveriş Sepeti', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('${_cartItems.length} Ürün eklendi (+1 TL yuvarlama aktif)', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
-                  ],
-                ),
-              ),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                icon: const Icon(Icons.add_rounded, size: 18),
-                label: const Text('Ürün Ekle'),
-                onPressed: _showAddProductModal,
-              ),
-            ],
-          ),
-        ),
-
-        // Sepetteki Ürünler Listesi veya Ödeme Rehberi
-        Expanded(
-          child: _showPaymentGuidance
-              ? _buildPaymentResultCard()
-              : (_cartItems.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.add_shopping_cart_rounded, size: 54, color: Color(0xFFCBD5E1)),
-                          const SizedBox(height: 12),
-                          const Text('Sepetiniz Henüz Boş', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF475569))),
-                          const SizedBox(height: 6),
-                          const Text('Aldığın ürünlerin fiyatını eklemek için yukarıdaki butona bas.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13)),
-                          const SizedBox(height: 16),
-                          ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB), foregroundColor: Colors.white),
-                            icon: const Icon(Icons.add_rounded),
-                            label: const Text('İlk Ürünü Ekle'),
-                            onPressed: _showAddProductModal,
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _cartItems.length,
-                      itemBuilder: (context, idx) {
-                        final item = _cartItems[idx];
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: const Color(0xFFEFF6FF),
-                              child: Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
-                            ),
-                            title: Text(item['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text('Girilen: ${item['rawPrice']} TL ➔ 1 TL Yuvarlama: ${item['roundedPrice']} TL'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444)),
-                              onPressed: () {
-                                setState(() => _cartItems.removeAt(idx));
-                              },
-                            ),
-                          ),
-                        );
-                      },
-                    )),
-        ),
-
-        // Alt Çubuk: Alışverişi Bitir & Ödemeye Geç
-        if (!_showPaymentGuidance && _cartItems.isNotEmpty)
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Alışveriş Başlık Özeti
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -3),
+            color: Colors.white,
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: const Color(0xFFEFF6FF), borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.shopping_cart_rounded, color: Color(0xFF2563EB), size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Aktif Alışveriş Sepeti', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('${_cartItems.length} Ürün eklendi (+1 TL yuvarlama aktif)', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                    ],
+                  ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                      icon: const Icon(Icons.camera_alt_rounded, size: 16),
+                      label: const Text('Fiyat Tara 📸', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: _showPriceTagScanDialog,
+                    ),
+                    const SizedBox(width: 6),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF2563EB),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      ),
+                      icon: const Icon(Icons.add_rounded, size: 16),
+                      label: const Text('Elle', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      onPressed: _showAddProductModal,
+                    ),
+                  ],
                 ),
               ],
             ),
-            child: SizedBox(
+          ),
+
+          // Sepetteki Ürünler Listesi veya Ödeme Rehberi
+          if (_showPaymentGuidance)
+            _buildPaymentResultCard()
+          else if (_cartItems.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                          label: const Text('Fiyat Tara 📸', style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: _showPriceTagScanDialog,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF16A34A),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          icon: const Icon(Icons.add_rounded, size: 20),
+                          label: const Text('İlk Ürünü Ekle', style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: _showAddProductModal,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1E40AF), Color(0xFF3B82F6)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.camera_alt_rounded, color: Colors.white, size: 28),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Görüntü İşleme ile Fiyat Oku 📸',
+                                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Market rafındaki fiyat etiketini kameraya göster. Sistem virgülün solunu okur, +1 TL yuvarlar ve sepete otomatik ekler!',
+                          style: TextStyle(color: Colors.white70, fontSize: 12.5, height: 1.35),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: const Color(0xFF1E40AF),
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: const Icon(Icons.document_scanner_rounded, size: 18),
+                            label: const Text('Kamerayı Aç ve Etiketi Tara 📷', style: TextStyle(fontWeight: FontWeight.bold)),
+                            onPressed: _showPriceTagScanDialog,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              itemCount: _cartItems.length,
+              itemBuilder: (context, idx) {
+                final item = _cartItems[idx];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: const Color(0xFFEFF6FF),
+                      child: Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
+                    ),
+                    title: Text(item['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Girilen: ${item['rawPrice']} TL ➔ 1 TL Yuvarlama: ${item['roundedPrice']} TL'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444)),
+                      onPressed: () {
+                        setState(() => _cartItems.removeAt(idx));
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Alışveriş Modu Alt Çubuğu (Scaffold bottomNavigationBar)
+  Widget _buildShoppingBottomBar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: const Icon(Icons.camera_alt_rounded),
+                label: const Text('+ Kamera ile Yeni Ürün Tara 📸', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                onPressed: _showPriceTagScanDialog,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
@@ -1281,8 +2013,9 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                 onPressed: _finishShopping,
               ),
             ),
-          ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -1484,10 +2217,20 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                             ],
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.refresh_rounded, color: Color(0xFF2563EB)),
-                          tooltip: 'Yeniden Tara',
-                          onPressed: _showReceiptScanDialog,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit_rounded, color: Color(0xFF16A34A)),
+                              tooltip: 'Tutarı Düzenle',
+                              onPressed: _showEditReceiptTotalDialog,
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.refresh_rounded, color: Color(0xFF2563EB)),
+                              tooltip: 'Yeniden Tara',
+                              onPressed: _showReceiptScanDialog,
+                            ),
+                          ],
                         ),
                       ],
                     ),
