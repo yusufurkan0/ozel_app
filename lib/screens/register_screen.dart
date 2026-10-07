@@ -19,11 +19,13 @@ import 'launcher/support_contacts_screen.dart';
 class RegisterScreen extends StatefulWidget {
   final UserRole initialRole;
   final bool isEditing;
+  final bool isOnboarding;
 
   const RegisterScreen({
     super.key,
     this.initialRole = UserRole.student,
     this.isEditing = false,
+    this.isOnboarding = false,
   });
 
   @override
@@ -395,6 +397,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     await prefs.setString('child_diagnosis', _selectedDiagnosis);
     await prefs.setString('avatar', _selectedAvatar);
     await prefs.setBool('is_registered', true);
+    await prefs.setBool('initial_info_completed', true);
 
     // Destek Kişileri (user_support_contacts) kaydı
     final List<Map<String, dynamic>> finalContacts = List.from(_supportContacts);
@@ -503,6 +506,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     await prefs.setString('child_diagnosis', _selectedDiagnosis);
     await prefs.setString('avatar', _selectedAvatar);
     await prefs.setBool('is_registered', true);
+    await prefs.setBool('initial_info_completed', true);
 
     // Destek kişileri rehberinde Ebeveyn kaydını senkronize et ve kaydet
     try {
@@ -541,7 +545,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         backgroundColor: AppColors.positiveGreen,
       ),
     );
-    Navigator.pop(context);
+    if (widget.isOnboarding || !Navigator.canPop(context)) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } else {
+      Navigator.pop(context);
+    }
   }
 
   @override
@@ -550,10 +561,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isEditing
+        title: Text(widget.isOnboarding
             ? 'Genel Bilgiler'
-            : (isParentRole ? 'Veli Hesabı Oluştur' : 'Genel Bilgiler & Kayıt')),
+            : (widget.isEditing
+                ? 'Genel Bilgiler'
+                : (isParentRole ? 'Veli Hesabı Oluştur' : 'Genel Bilgiler & Kayıt'))),
         elevation: 0,
+        actions: [
+          if (widget.isOnboarding)
+            TextButton.icon(
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('initial_info_completed', true);
+                if (context.mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  );
+                }
+              },
+              icon: const Icon(Icons.arrow_forward_rounded, color: Colors.blue),
+              label: const Text(
+                'Daha Sonra',
+                style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+              ),
+            ),
+        ],
       ),
       body: Container(
         width: double.infinity,

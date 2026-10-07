@@ -1,12 +1,16 @@
-import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/social_story_book.dart';
 import '../../services/social_story_service.dart';
+import '../../widgets/safe_image_widget.dart';
 import 'social_story_book_editor_screen.dart';
 import 'social_story_reader_screen.dart';
 import '../../theme/app_theme.dart';
 
+/// Özel Gereksinimli Çocuklar İçin Sosyal Öykü Kütüphanesi Ekranı
+/// (Special Stories uyumlu, boş kütüphane, kitap oluşturma, sayfa ekleme)
 class SocialStoryLibraryScreen extends StatefulWidget {
   final String type; // 'social_story' veya 'task_list'
   final bool isEmbedded;
@@ -34,6 +38,14 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
   Future<void> _load() async {
     await _service.loadBooks(type: widget.type);
     if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<String?> _processPickedImage(XFile picked) async {
+    if (kIsWeb) {
+      final bytes = await picked.readAsBytes();
+      return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+    }
+    return picked.path;
   }
 
   void _openCreateBookDialog() {
@@ -79,7 +91,9 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
                   controller: titleCtrl,
                   autofocus: true,
                   decoration: InputDecoration(
-                    hintText: widget.type == 'task_list' ? 'Örn: Sabah Hazırlanma Görevleri' : 'Örn: Dişlerimi Fırçalıyorum',
+                    hintText: widget.type == 'task_list'
+                        ? 'Örn: Sabah Hazırlanma Görevleri'
+                        : 'Örn: Dişlerimi Fırçalıyorum',
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
@@ -122,19 +136,20 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
                   Stack(
                     children: [
                       Container(
-                        height: 100,
+                        height: 110,
                         width: double.infinity,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(14),
-                          image: DecorationImage(
-                            image: FileImage(File(coverImagePath!)),
-                            fit: BoxFit.cover,
-                          ),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: buildSafeImage(coverImagePath, fit: BoxFit.cover),
                         ),
                       ),
                       Positioned(
-                        top: 4,
-                        right: 4,
+                        top: 6,
+                        right: 6,
                         child: CircleAvatar(
                           backgroundColor: Colors.black54,
                           radius: 14,
@@ -150,28 +165,40 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
                 else
                   Row(
                     children: [
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: const Icon(Icons.camera_alt_rounded, size: 18),
+                          label: const Text('Foto Çek', style: TextStyle(fontSize: 12)),
+                          onPressed: () async {
+                            final p = await ImagePicker().pickImage(source: ImageSource.camera);
+                            if (p != null) {
+                              final path = await _processPickedImage(p);
+                              setDialogState(() => coverImagePath = path);
+                            }
+                          },
                         ),
-                        icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                        label: const Text('Foto Çek', style: TextStyle(fontSize: 12)),
-                        onPressed: () async {
-                          final p = await ImagePicker().pickImage(source: ImageSource.camera);
-                          if (p != null) setDialogState(() => coverImagePath = p.path);
-                        },
                       ),
                       const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: const Icon(Icons.photo_library_rounded, size: 18),
+                          label: const Text('Galeri', style: TextStyle(fontSize: 12)),
+                          onPressed: () async {
+                            final p = await ImagePicker().pickImage(source: ImageSource.gallery);
+                            if (p != null) {
+                              final path = await _processPickedImage(p);
+                              setDialogState(() => coverImagePath = path);
+                            }
+                          },
                         ),
-                        icon: const Icon(Icons.photo_library_rounded, size: 18),
-                        label: const Text('Galeri', style: TextStyle(fontSize: 12)),
-                        onPressed: () async {
-                          final p = await ImagePicker().pickImage(source: ImageSource.gallery);
-                          if (p != null) setDialogState(() => coverImagePath = p.path);
-                        },
                       ),
                     ],
                   ),
@@ -188,6 +215,7 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
                 backgroundColor: Color(selectedColor),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
               onPressed: () async {
                 final title = titleCtrl.text.trim();
@@ -205,7 +233,7 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
                 if (ctx.mounted) Navigator.pop(ctx);
                 setState(() {});
 
-                // Doğrudan sayfa ekleme ekranına yönlendir
+                // Kitap oluştuktan sonra doğrudan sayfa ekleme ekranını aç
                 if (mounted) {
                   Navigator.push(
                     context,
@@ -228,7 +256,7 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Kitabı Sil'),
-        content: Text('"${book.title}" kitabını ve içindeki sayfaları silmek istediğinize emin misiniz?'),
+        content: Text('"${book.title}" kitabını ve içindeki tüm sayfaları silmek istediğinize emin misiniz?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Vazgeç')),
           ElevatedButton(
@@ -395,7 +423,7 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(16),
                                     child: book.coverImagePath != null
-                                        ? Image.file(File(book.coverImagePath!), fit: BoxFit.cover)
+                                        ? buildSafeImage(book.coverImagePath, fit: BoxFit.cover)
                                         : Center(
                                             child: Icon(
                                               isTask ? Icons.task_alt_rounded : Icons.auto_stories_rounded,
@@ -465,16 +493,7 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
                                   ),
                                 ),
 
-                                // Oku / Aç Butonu
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: themeColor.withValues(alpha: 0.12),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(Icons.arrow_forward_ios_rounded, color: themeColor, size: 18),
-                                ),
+                                const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 18),
                               ],
                             ),
                           ),
@@ -484,11 +503,11 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
                   },
                 ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF7C3AED),
+        backgroundColor: isTask ? Colors.amber.shade800 : const Color(0xFF7C3AED),
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
         label: Text(
-          isTask ? 'Görev Kitabı Ekle' : 'Kitap Ekle',
+          isTask ? 'Yeni Görev Kitabı Ekle' : 'Yeni Kitap Ekle',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         onPressed: _openCreateBookDialog,

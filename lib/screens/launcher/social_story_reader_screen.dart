@@ -5,6 +5,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../models/social_story_book.dart';
 import '../../services/social_story_service.dart';
+import '../../widgets/safe_image_widget.dart';
 
 class SocialStoryReaderScreen extends StatefulWidget {
   final SocialStoryBook book;
@@ -28,6 +29,7 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
 
   bool _isAudioEnabled = true; // "Ses kaydını dinlemek için açma kapama seçeneği olacak"
   bool _isPlayingAudio = false;
+  bool _forceLandscape = false; // "Yatay tutunca sayfa büyüyecek" - Masaüstü/web için manuel büyütme desteği
 
   @override
   void initState() {
@@ -59,7 +61,7 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
       await _tts.stop();
     } catch (_) {}
 
-    setState(() => _isPlayingAudio = true);
+    if (mounted) setState(() => _isPlayingAudio = true);
 
     // 1. Kullanıcının kaydettiği özel ses varsa onu çal
     if (page.audioPath != null && page.audioPath!.isNotEmpty) {
@@ -80,8 +82,10 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
         }
       }
     } else if (page.text.isNotEmpty) {
-      // 2. Özel ses kaydı yoksa TTS ile metni oku
-      await _tts.speak(page.text);
+      // 2. Özel ses kaydı yoksa TTS ile metni seslendir
+      try {
+        await _tts.speak(page.text);
+      } catch (_) {}
     }
 
     if (mounted) setState(() => _isPlayingAudio = false);
@@ -91,6 +95,30 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
     setState(() {
       _isAudioEnabled = !_isAudioEnabled;
     });
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              _isAudioEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _isAudioEnabled ? 'Seslendirme Açık' : 'Seslendirme Kapatıldı (Sessiz Mod)',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 1),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: _isAudioEnabled ? Colors.green.shade700 : Colors.grey.shade800,
+      ),
+    );
+
     if (!_isAudioEnabled) {
       _audioPlayer.stop();
       _tts.stop();
@@ -128,12 +156,12 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
 
     return OrientationBuilder(
       builder: (context, orientation) {
-        final isLandscape = orientation == Orientation.landscape;
+        final isLandscape = orientation == Orientation.landscape || _forceLandscape;
 
         return Scaffold(
-          backgroundColor: isLandscape ? Colors.black : const Color(0xFFF8FAFC),
+          backgroundColor: isLandscape ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
           appBar: isLandscape
-              ? null // Yatay modda tam ekran sürükleyicilik için üst bar gizlenir
+              ? null
               : AppBar(
                   elevation: 0,
                   backgroundColor: Color(book.coverColorValue),
@@ -147,11 +175,19 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
                   actions: [
+                    // Yatay Büyütme Butonu (Masaüstü ve web için de kolay test imkanı)
+                    IconButton(
+                      icon: const Icon(Icons.screen_rotation_rounded),
+                      tooltip: 'Yatay Büyüt (Geniş Ekran)',
+                      onPressed: () {
+                        setState(() => _forceLandscape = !_forceLandscape);
+                      },
+                    ),
                     // Ses Açma / Kapama Seçeneği (Kullanıcı İsteği)
                     IconButton(
                       icon: Icon(
                         _isAudioEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                        color: Colors.white,
+                        color: _isAudioEnabled ? Colors.white : Colors.white60,
                       ),
                       tooltip: _isAudioEnabled ? 'Sesi Kapat' : 'Sesi Aç',
                       onPressed: _toggleAudio,
@@ -179,53 +215,131 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
                 },
               ),
 
-              // Yatay mod için hızlı çıkış ve ses kontrolleri
+              // Yatay mod için üst kontrol çubuğu
               if (isLandscape)
                 Positioned(
                   top: 16,
-                  left: 16,
-                  right: 16,
+                  left: 20,
+                  right: 20,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.black54,
+                          color: Colors.black.withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 26),
-                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                          onPressed: () {
+                            if (_forceLandscape) {
+                              setState(() => _forceLandscape = false);
+                            } else {
+                              Navigator.pop(context);
+                            }
+                          },
+                          tooltip: 'Görünümü Kapat',
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.black54,
+                          color: Colors.black.withValues(alpha: 0.65),
                           borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white24),
                         ),
                         child: Text(
-                          '${book.title} • ${_currentPage + 1} / ${pages.length}',
+                          '${book.title} • Sayfa ${_currentPage + 1} / ${pages.length}',
                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                       ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: IconButton(
-                          icon: Icon(
-                            _isAudioEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                            color: Colors.white,
-                            size: 26,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.65),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.screen_lock_portrait_rounded, color: Colors.white, size: 22),
+                              tooltip: 'Dikey Görünüme Dön',
+                              onPressed: () {
+                                setState(() => _forceLandscape = false);
+                              },
+                            ),
                           ),
-                          onPressed: _toggleAudio,
-                        ),
+                          const SizedBox(width: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.65),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: IconButton(
+                              icon: Icon(
+                                _isAudioEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                                color: _isAudioEnabled ? Colors.lightGreenAccent : Colors.white60,
+                                size: 24,
+                              ),
+                              tooltip: _isAudioEnabled ? 'Sesi Kapat' : 'Sesi Aç',
+                              onPressed: _toggleAudio,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
+
+              // Yatay modda sayfa geçiş okları
+              if (isLandscape && pages.length > 1) ...[
+                if (_currentPage > 0)
+                  Positioned(
+                    left: 16,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.chevron_left_rounded, color: Colors.white, size: 36),
+                          onPressed: () {
+                            _pageController.previousPage(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_currentPage < pages.length - 1)
+                  Positioned(
+                    right: 16,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 36),
+                          onPressed: () {
+                            _pageController.nextPage(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ],
           ),
           bottomNavigationBar: isLandscape ? null : _buildBottomNavigation(pages.length),
@@ -268,7 +382,20 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(22),
-              child: _buildImageWidget(page.imagePath, fit: BoxFit.contain),
+              child: buildSafeImage(
+                page.imagePath,
+                fit: BoxFit.contain,
+                placeholder: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.photo_size_select_actual_outlined, size: 64, color: Colors.grey.shade400),
+                      const SizedBox(height: 8),
+                      Text('Fotoğraf Eklenmedi', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -309,7 +436,10 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                icon: const Icon(Icons.replay_rounded, size: 20),
+                icon: Icon(
+                  _isPlayingAudio ? Icons.graphic_eq_rounded : Icons.replay_rounded,
+                  size: 20,
+                ),
                 label: const Text('Tekrar Dinle', style: TextStyle(fontWeight: FontWeight.bold)),
                 onPressed: () => _playPageAudio(index),
               ),
@@ -345,44 +475,80 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
     );
   }
 
-  // --- YATAY (LANDSCAPE) SAYFA GÖRÜNÜMÜ: TAM EKRAN BÜYÜME ---
+  // --- YATAY (LANDSCAPE) SAYFA GÖRÜNÜMÜ: DEV BÜYÜYEN RESİM VE NET METİN ---
+  // Kullanıcı İsteği: "Yatay tutunca sayfa büyüyecek. Her sayfada tek bir resim, bir metin ve seslendirme olacak."
   Widget _buildLandscapePage(SocialStoryPage page, int index, int total) {
     return Container(
       width: double.infinity,
       height: double.infinity,
-      color: Colors.black,
+      color: const Color(0xFF0F172A),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Dev Tam Boy Büyüyen Resim (Kullanıcı İsteği: "Yatay tutunca sayfa büyüyecek")
+          // Dev Tam Boy Büyüyen Resim
           Positioned.fill(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 48, 16, 80),
-              child: _buildImageWidget(page.imagePath, fit: BoxFit.contain),
+              padding: const EdgeInsets.fromLTRB(60, 64, 60, 88),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: buildSafeImage(
+                  page.imagePath,
+                  fit: BoxFit.contain,
+                  placeholder: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.photo_size_select_actual_outlined, size: 80, color: Colors.white38),
+                        const SizedBox(height: 8),
+                        const Text('Fotoğraf Yok', style: TextStyle(color: Colors.white54, fontSize: 16)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
 
-          // Altta Net Altyazı / Metin Çubuğu
+          // Altta Net Altyazı ve Dinleme Butonu Çubuğu
           Positioned(
-            bottom: 14,
-            left: 24,
-            right: 24,
+            bottom: 16,
+            left: 48,
+            right: 48,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(18),
+                color: Colors.black.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: Colors.white24),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
+                ],
               ),
-              child: Text(
-                page.text,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  height: 1.3,
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      page.text.isNotEmpty ? page.text : '(Metin eklenmedi)',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    icon: Icon(
+                      _isPlayingAudio ? Icons.graphic_eq_rounded : Icons.volume_up_rounded,
+                      color: Colors.amberAccent,
+                      size: 28,
+                    ),
+                    tooltip: 'Seslendir',
+                    onPressed: () => _playPageAudio(index),
+                  ),
+                ],
               ),
             ),
           ),
@@ -458,46 +624,6 @@ class _SocialStoryReaderScreenState extends State<SocialStoryReaderScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildImageWidget(String? path, {required BoxFit fit}) {
-    if (path == null || path.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.photo_size_select_actual_outlined, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 8),
-            Text('Fotoğraf Eklenmedi', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
-          ],
-        ),
-      );
-    }
-
-    if (path.startsWith('assets/')) {
-      return Image.asset(
-        path,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) => const Center(
-          child: Icon(Icons.broken_image_rounded, size: 64, color: Colors.grey),
-        ),
-      );
-    }
-
-    final file = File(path);
-    if (file.existsSync()) {
-      return Image.file(
-        file,
-        fit: fit,
-        errorBuilder: (context, error, stackTrace) => const Center(
-          child: Icon(Icons.broken_image_rounded, size: 64, color: Colors.grey),
-        ),
-      );
-    }
-
-    return Center(
-      child: Icon(Icons.image_outlined, size: 64, color: Colors.grey.shade400),
     );
   }
 }

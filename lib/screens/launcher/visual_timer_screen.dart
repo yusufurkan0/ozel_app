@@ -4,9 +4,8 @@ import 'package:flutter/material.dart';
 import '../../services/timer_service.dart';
 import '../../theme/app_theme.dart';
 
-/// iPhone Saat uygulamasındaki Sayaçlar deneyimini birebir sunan,
-/// tekli veya çift sayaçlı, görsel azalan süreli (Dairesel Saat ve Dikey Sütun)
-/// ve seçilebilir müzikli zamanlayıcı ekranı.
+/// Temiz, aydınlık ve beyaz temalı; tekli veya çift sayaçlı,
+/// görsel azalan süreli (Dairesel Saat ve Dikey Sütun) ve seçilebilir müzikli zamanlayıcı ekranı.
 class VisualTimerScreen extends StatefulWidget {
   const VisualTimerScreen({super.key});
 
@@ -42,11 +41,11 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
 
   Color _getTimerColor(double progress) {
     if (progress > 0.5) {
-      return const Color(0xFF34C759); // iOS Yeşil
+      return const Color(0xFF16A34A); // Canlı Yeşil
     } else if (progress > 0.2) {
-      return const Color(0xFFFF9500); // iOS Turuncu / Kehribar
+      return const Color(0xFFEA580C); // Canlı Turuncu
     } else {
-      return const Color(0xFFFF3B30); // iOS Kırmızı
+      return const Color(0xFFDC2626); // Kırmızı
     }
   }
 
@@ -62,21 +61,21 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
         final isSideBySide = timerService.isSideBySideLayout;
 
         return Scaffold(
-          backgroundColor: Colors.black, // iPhone Saat tarzı koyu tema
+          backgroundColor: const Color(0xFFF8FAFC), // Ferah beyaz tema arka planı
           appBar: AppBar(
-            backgroundColor: Colors.black,
+            backgroundColor: Colors.white,
             elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A)),
               onPressed: () => Navigator.pop(context),
             ),
-            title: Column(
+            title: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Sayaçlar',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Color(0xFF0F172A),
                     fontWeight: FontWeight.w900,
                     fontSize: 22,
                     letterSpacing: -0.5,
@@ -85,7 +84,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                 Text(
                   'Kronometre & Görsel Süre',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: Color(0xFF64748B),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -97,10 +96,13 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
               TextButton.icon(
                 style: TextButton.styleFrom(
                   backgroundColor: isDual
-                      ? const Color(0xFFFF9500).withValues(alpha: 0.2)
-                      : const Color(0xFF1C1C1E),
-                  foregroundColor: isDual ? const Color(0xFFFF9500) : Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ? const Color(0xFFFFEDD5)
+                      : const Color(0xFFF1F5F9),
+                  foregroundColor: isDual ? const Color(0xFFEA580C) : const Color(0xFF1E293B),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: isDual ? const Color(0xFFFDBA74) : const Color(0xFFE2E8F0)),
+                  ),
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 ),
                 icon: Icon(isDual ? Icons.timer_off_rounded : Icons.more_time_rounded, size: 18),
@@ -118,7 +120,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                   tooltip: isSideBySide ? 'Alt Alta Yerleşim' : 'Yan Yana Yerleşim',
                   icon: Icon(
                     isSideBySide ? Icons.view_agenda_rounded : Icons.view_column_rounded,
-                    color: const Color(0xFF34C759),
+                    color: const Color(0xFF16A34A),
                   ),
                   onPressed: () => timerService.setSideBySideLayout(!isSideBySide),
                 ),
@@ -153,8 +155,8 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
   // ─── Hızlı Ön Ayar Butonları Barı (5 dk, 10 dk, vb.) ───
   Widget _buildPresetChipsBar(VisualTimerService service) {
     return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _quickPresets.length,
@@ -166,14 +168,14 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
             label: Text(
               '$mins dk',
               style: TextStyle(
-                color: isSelected ? Colors.black : Colors.white,
-                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w500,
+                color: isSelected ? Colors.white : const Color(0xFF1E293B),
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600,
                 fontSize: 12.5,
               ),
             ),
-            backgroundColor: isSelected ? const Color(0xFF34C759) : const Color(0xFF1C1C1E),
+            backgroundColor: isSelected ? const Color(0xFF16A34A) : Colors.white,
             side: BorderSide(
-              color: isSelected ? const Color(0xFF34C759) : Colors.white.withValues(alpha: 0.1),
+              color: isSelected ? const Color(0xFF16A34A) : const Color(0xFFE2E8F0),
             ),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             onPressed: () {
@@ -192,19 +194,20 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFF3B30),
+        color: const Color(0xFFFEE2E2),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
+        border: Border.all(color: const Color(0xFFEF4444), width: 1.5),
+        boxShadow: const [
           BoxShadow(
-            color: const Color(0xFFFF3B30).withValues(alpha: 0.5),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Color(0x1ADB2777),
+            blurRadius: 12,
+            offset: Offset(0, 4),
           ),
         ],
       ),
       child: Row(
         children: [
-          const Icon(Icons.alarm_on_rounded, color: Colors.white, size: 28),
+          const Icon(Icons.alarm_on_rounded, color: Color(0xFFDC2626), size: 28),
           const SizedBox(width: 12),
           const Expanded(
             child: Column(
@@ -212,19 +215,19 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
               children: [
                 Text(
                   'SÜRE DOLDU! ⏰',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                  style: TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.w900, fontSize: 16),
                 ),
                 Text(
                   'Belirlenen zaman tamamlandı. Alarm çalıyor...',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(color: Color(0xFFB91C1C), fontSize: 12),
                 ),
               ],
             ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFFFF3B30),
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             ),
@@ -287,7 +290,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
   }
 
   // ─────────────────────────────────────────────────────────────
-  // SAYAÇ KARTI (IPHONE KURULUM ÇARKI VEYA GÖRSEL SÜRE SAYIMI)
+  // SAYAÇ KARTI (BEYAZ TEMA, MODERN & ERGONOMİK)
   // ─────────────────────────────────────────────────────────────
   Widget _buildTimerCard(
     TimerItemModel timer,
@@ -299,14 +302,21 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
 
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF141416),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: timer.isAlarmActive
-              ? const Color(0xFFFF3B30)
-              : (timer.isRunning ? const Color(0xFF34C759).withValues(alpha: 0.5) : const Color(0xFF2C2C2E)),
-          width: timer.isAlarmActive ? 2.0 : 1.0,
+              ? const Color(0xFFEF4444)
+              : (timer.isRunning ? const Color(0xFF22C55E).withValues(alpha: 0.6) : const Color(0xFFE2E8F0)),
+          width: timer.isAlarmActive ? 2.0 : 1.2,
         ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0C0F172A),
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
       padding: EdgeInsets.symmetric(
         horizontal: isCompact ? 12 : 20,
@@ -326,14 +336,14 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                     height: 10,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: timer.isRunning ? const Color(0xFF34C759) : const Color(0xFF8E8E93),
+                      color: timer.isRunning ? const Color(0xFF16A34A) : const Color(0xFF94A3B8),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     timer.label,
                     style: TextStyle(
-                      color: Colors.white,
+                      color: const Color(0xFF0F172A),
                       fontSize: isCompact ? 16 : 18,
                       fontWeight: FontWeight.w800,
                     ),
@@ -342,14 +352,14 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1C1C1E),
+                      color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
                     child: Text(
                       timer.formattedTime,
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xFF0F172A),
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                         fontFeatures: [FontFeature.tabularFigures()],
@@ -357,7 +367,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.edit_rounded, color: Color(0xFF8E8E93), size: 16),
+                    icon: const Icon(Icons.edit_rounded, color: Color(0xFF64748B), size: 16),
                     tooltip: 'İsim Değiştir',
                     onPressed: () => _showLabelEditDialog(timer, service),
                   ),
@@ -367,8 +377,9 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
               // Görsel Mod Butonu (Saat / Dikey Sütun)
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1C1C1E),
+                  color: const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Row(
                   children: [
@@ -377,8 +388,8 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                         Icons.timelapse_rounded,
                         size: 18,
                         color: timer.visualStyle == 'circle'
-                            ? const Color(0xFF34C759)
-                            : const Color(0xFF8E8E93),
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFF94A3B8),
                       ),
                       tooltip: 'Dairesel Saat Görünümü',
                       onPressed: () => service.setTimerVisualStyle(timer, 'circle'),
@@ -388,8 +399,8 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                         Icons.view_headline_rounded,
                         size: 18,
                         color: timer.visualStyle == 'column'
-                            ? const Color(0xFF34C759)
-                            : const Color(0xFF8E8E93),
+                            ? const Color(0xFF16A34A)
+                            : const Color(0xFF94A3B8),
                       ),
                       tooltip: 'Dikey Sütun Görünümü',
                       onPressed: () => service.setTimerVisualStyle(timer, 'column'),
@@ -402,7 +413,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
 
           const SizedBox(height: 16),
 
-          // ─── 1. BÖLÜM: YA IPHONE ÇARK SEÇİCİ YA DA GÖRSEL GERİ SAYIM ───
+          // ─── 1. BÖLÜM: YA BEYAZ ÇARK SEÇİCİ YA DA GÖRSEL GERİ SAYIM ───
           if (!isRunningOrPaused)
             _buildIosWheelPicker(timer, service, isCompact: isCompact)
           else
@@ -410,12 +421,12 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
 
           const SizedBox(height: 24),
 
-          // ─── 2. BÖLÜM: IPHONE YUVARLAK KONTROL BUTONLARI (Vazgeç & Başlat/Duraklat) ───
+          // ─── 2. BÖLÜM: YUVARLAK KONTROL BUTONLARI (Vazgeç & Başlat/Duraklat) ───
           _buildIosCircularButtons(timer, service, isCompact: isCompact),
 
           const SizedBox(height: 20),
 
-          // ─── 3. BÖLÜM: IPHONE AYARLAR LİSTESİ (Etiket & Sayaç Bitince) ───
+          // ─── 3. BÖLÜM: BEYAZ AYARLAR GRUBU (Etiket & Sayaç Bitince) ───
           _buildIosSettingsGroup(timer, service),
         ],
       ),
@@ -423,24 +434,25 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
   }
 
   // ─────────────────────────────────────────────────────────────
-  // IPHONE SAAT ÇARKI SEÇİCİ (saat - dk. - sn.)
+  // BEYAZ ÇARK SEÇİCİ (saat - dk. - sn.)
   // ─────────────────────────────────────────────────────────────
   Widget _buildIosWheelPicker(TimerItemModel timer, VisualTimerService service, {bool isCompact = false}) {
     return Container(
       height: isCompact ? 160 : 190,
       decoration: BoxDecoration(
-        color: Colors.black,
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Orta Seçim Vurgu Çubuğu (Fotoğraftaki gri şerit gibi)
+          // Orta Seçim Vurgu Çubuğu
           Container(
             height: 38,
             margin: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: const Color(0xFF2C2C2E).withValues(alpha: 0.6),
+              color: const Color(0xFFE2E8F0).withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(10),
             ),
           ),
@@ -462,9 +474,9 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                       child: Text(
                         '$i saat',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontSize: isCompact ? 16 : 19,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     );
@@ -486,9 +498,9 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                       child: Text(
                         '$i dk.',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontSize: isCompact ? 16 : 19,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     );
@@ -510,9 +522,9 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                       child: Text(
                         '$i sn.',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontSize: isCompact ? 16 : 19,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     );
@@ -562,7 +574,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                 Text(
                   timer.formattedTime,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: const Color(0xFF0F172A),
                     fontSize: isCompact ? 32 : 40,
                     fontWeight: FontWeight.w900,
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -573,7 +585,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: primaryColor.withValues(alpha: 0.2),
+                    color: primaryColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -589,7 +601,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                   const SizedBox(height: 6),
                   Text(
                     'Bitiş: ${timer.endTime!.hour.toString().padLeft(2, '0')}:${timer.endTime!.minute.toString().padLeft(2, '0')}',
-                    style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
+                    style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
                   ),
                 ],
               ],
@@ -627,7 +639,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                       Text(
                         timer.formattedTime,
                         style: TextStyle(
-                          color: Colors.white,
+                          color: const Color(0xFF0F172A),
                           fontSize: isCompact ? 30 : 38,
                           fontWeight: FontWeight.w900,
                           fontFeatures: const [FontFeature.tabularFigures()],
@@ -647,8 +659,8 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                         const SizedBox(height: 2),
                         Text(
                           'Bitiş: ${timer.endTime!.hour.toString().padLeft(2, '0')}:${timer.endTime!.minute.toString().padLeft(2, '0')}',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.6),
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
                             fontSize: 11.5,
                           ),
                         ),
@@ -665,7 +677,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
   }
 
   // ─────────────────────────────────────────────────────────────
-  // IPHONE YUVARLAK KONTROL BUTONLARI (Vazgeç & Başlat)
+  // YUVARLAK KONTROL BUTONLARI (Vazgeç & Başlat)
   // ─────────────────────────────────────────────────────────────
   Widget _buildIosCircularButtons(TimerItemModel timer, VisualTimerService service, {bool isCompact = false}) {
     final isRunning = timer.isRunning;
@@ -675,7 +687,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // SOL BUTON: Vazgeç / Sıfırla (Gri Yuvarlak Buton)
+        // SOL BUTON: Vazgeç / Sıfırla (Beyaz / Açık Gri Yuvarlak Buton)
         GestureDetector(
           onTap: () {
             service.resetTimerItem(timer);
@@ -685,8 +697,8 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
             height: buttonSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF2C2C2E),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1), width: 1.5),
+              color: const Color(0xFFF1F5F9),
+              border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
             ),
             child: const Center(
               child: Column(
@@ -695,7 +707,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                   Text(
                     'Vazgeç',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: Color(0xFF1E293B),
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
@@ -703,7 +715,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                   Text(
                     'Sıfırla',
                     style: TextStyle(
-                      color: Color(0xFF8E8E93),
+                      color: Color(0xFF64748B),
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
                     ),
@@ -725,12 +737,12 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isRunning
-                  ? const Color(0xFF38240D) // Koyu Turuncu (Duraklat arka planı)
-                  : const Color(0xFF0F381E), // Koyu Yeşil (Başlat arka planı)
+                  ? const Color(0xFFFFEDD5) // Açık Turuncu (Duraklat arka planı)
+                  : const Color(0xFFDCFCE7), // Açık Yeşil (Başlat arka planı)
               border: Border.all(
                 color: isRunning
-                    ? const Color(0xFFFF9500).withValues(alpha: 0.4)
-                    : const Color(0xFF34C759).withValues(alpha: 0.4),
+                    ? const Color(0xFFFB923C)
+                    : const Color(0xFF4ADE80),
                 width: 1.5,
               ),
             ),
@@ -738,7 +750,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
               child: Text(
                 isRunning ? 'Duraklat' : (isPaused ? 'Sürdür' : 'Başlat'),
                 style: TextStyle(
-                  color: isRunning ? const Color(0xFFFF9500) : const Color(0xFF34C759),
+                  color: isRunning ? const Color(0xFFC2410C) : const Color(0xFF15803D),
                   fontSize: isCompact ? 13 : 15,
                   fontWeight: FontWeight.bold,
                 ),
@@ -751,13 +763,14 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
   }
 
   // ─────────────────────────────────────────────────────────────
-  // IPHONE AYARLAR KUTUSU (Etiket & Sayaç Bitince)
+  // AYARLAR KUTUSU (Etiket & Sayaç Bitince)
   // ─────────────────────────────────────────────────────────────
   Widget _buildIosSettingsGroup(TimerItemModel timer, VisualTimerService service) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1C1C1E),
+        color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         children: [
@@ -772,16 +785,16 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                 children: [
                   const Text(
                     'Etiket',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   Row(
                     children: [
                       Text(
                         timer.label,
-                        style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 16),
+                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 16),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF48484A), size: 14),
+                      const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF94A3B8), size: 14),
                     ],
                   ),
                 ],
@@ -789,7 +802,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
             ),
           ),
 
-          const Divider(height: 1, color: Color(0xFF2C2C2E), indent: 16),
+          const Divider(height: 1, color: Color(0xFFE2E8F0), indent: 16),
 
           // 2. Satır: Sayaç Bitince (Müzik Seçimi)
           InkWell(
@@ -802,16 +815,16 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                 children: [
                   const Text(
                     'Sayaç Bitince',
-                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: Color(0xFF0F172A), fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   Row(
                     children: [
                       Text(
                         timer.soundTitle,
-                        style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 16),
+                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 16),
                       ),
                       const SizedBox(width: 4),
-                      const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF48484A), size: 14),
+                      const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF94A3B8), size: 14),
                     ],
                   ),
                 ],
@@ -833,25 +846,29 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1C1C1E),
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: const Text('Sayaç Etiketi', style: TextStyle(color: Colors.white, fontSize: 18)),
+        title: const Text('Sayaç Etiketi', style: TextStyle(color: Color(0xFF0F172A), fontSize: 18, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
               controller: controller,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF0F172A)),
               autofocus: true,
               decoration: InputDecoration(
                 hintText: 'Örn: Ders, Mola, Oyun...',
-                hintStyle: const TextStyle(color: Color(0xFF8E8E93)),
+                hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
                 filled: true,
-                fillColor: const Color(0xFF2C2C2E),
+                fillColor: const Color(0xFFF8FAFC),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                 ),
               ),
             ),
@@ -860,9 +877,10 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
               spacing: 6,
               children: ['Ders', 'Mola', 'Oyun', 'Ödev', 'Diş', 'Yemek'].map((sug) {
                 return ActionChip(
-                  label: Text(sug, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                  backgroundColor: const Color(0xFF2C2C2E),
+                  label: Text(sug, style: const TextStyle(color: Color(0xFF1E293B), fontSize: 12)),
+                  backgroundColor: const Color(0xFFF1F5F9),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
                   onPressed: () {
                     controller.text = sug;
                   },
@@ -874,11 +892,11 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Vazgeç', style: TextStyle(color: Color(0xFF8E8E93))),
+            child: const Text('Vazgeç', style: TextStyle(color: Color(0xFF64748B))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF34C759),
+              backgroundColor: const Color(0xFF16A34A),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
@@ -904,7 +922,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
             return Container(
               height: MediaQuery.of(context).size.height * 0.65,
               decoration: const BoxDecoration(
-                color: Color(0xFF1C1C1E),
+                color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
               ),
               child: Column(
@@ -914,7 +932,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF48484A),
+                      color: const Color(0xFFCBD5E1),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -926,13 +944,13 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                         const Text(
                           'Sayaç Bitince Çalacak Müzik',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF0F172A),
                             fontSize: 17,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.white),
+                          icon: const Icon(Icons.close_rounded, color: Color(0xFF0F172A)),
                           onPressed: () {
                             service.stopPreviewSound();
                             Navigator.pop(ctx);
@@ -941,12 +959,12 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                       ],
                     ),
                   ),
-                  const Divider(color: Color(0xFF2C2C2E), height: 1),
+                  const Divider(color: Color(0xFFE2E8F0), height: 1),
                   Expanded(
                     child: ListView.separated(
                       padding: const EdgeInsets.all(16),
                       itemCount: kAvailableSounds.length,
-                      separatorBuilder: (_, __) => const Divider(color: Color(0xFF2C2C2E), height: 1),
+                      separatorBuilder: (_, __) => const Divider(color: Color(0xFFE2E8F0), height: 1),
                       itemBuilder: (context, index) {
                         final sound = kAvailableSounds[index];
                         final isSelected = timer.soundKey == sound.key;
@@ -955,34 +973,34 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           leading: CircleAvatar(
                             backgroundColor: isSelected
-                                ? const Color(0xFF34C759)
-                                : const Color(0xFF2C2C2E),
-                            foregroundColor: isSelected ? Colors.black : Colors.white,
+                                ? const Color(0xFFDCFCE7)
+                                : const Color(0xFFF1F5F9),
+                            foregroundColor: isSelected ? const Color(0xFF16A34A) : const Color(0xFF64748B),
                             child: Icon(sound.icon, size: 20),
                           ),
                           title: Text(
                             sound.title,
                             style: TextStyle(
-                              color: isSelected ? const Color(0xFF34C759) : Colors.white,
+                              color: isSelected ? const Color(0xFF16A34A) : const Color(0xFF0F172A),
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                             ),
                           ),
                           subtitle: Text(
                             sound.description,
-                            style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 12),
+                            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
                           ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.play_circle_fill_rounded, color: Color(0xFF0A84FF), size: 28),
+                                icon: const Icon(Icons.play_circle_fill_rounded, color: Color(0xFF2563EB), size: 28),
                                 tooltip: 'Dinle / Önizle',
                                 onPressed: () {
                                   service.previewSound(sound);
                                 },
                               ),
                               if (isSelected)
-                                const Icon(Icons.check_rounded, color: Color(0xFF34C759)),
+                                const Icon(Icons.check_rounded, color: Color(0xFF16A34A)),
                             ],
                           ),
                           onTap: () {
@@ -1007,7 +1025,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
 }
 
 // ─────────────────────────────────────────────────────────────
-// DAİRESEL SAAT ÇİZİCİ (CUSTOM PAINTER)
+// DAİRESEL SAAT ÇİZİCİ (CUSTOM PAINTER - BEYAZ TEMA)
 // ─────────────────────────────────────────────────────────────
 class VisualClockPainter extends CustomPainter {
   final double progress; // 1.0 -> 0.0
@@ -1027,7 +1045,7 @@ class VisualClockPainter extends CustomPainter {
 
     // 1. Kadran Çizgileri (60 dakika / saniye çentikleri)
     final tickPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.15)
+      ..color = const Color(0xFFCBD5E1)
       ..strokeWidth = 1.5;
 
     for (int i = 0; i < 60; i++) {
@@ -1035,7 +1053,7 @@ class VisualClockPainter extends CustomPainter {
       final isMajor = i % 5 == 0;
       final tickLength = isMajor ? 8.0 : 4.0;
       tickPaint.strokeWidth = isMajor ? 2.0 : 1.0;
-      tickPaint.color = isMajor ? Colors.white.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.12);
+      tickPaint.color = isMajor ? const Color(0xFF64748B) : const Color(0xFFCBD5E1);
 
       final outer = Offset(center.dx + radius * cos(angle), center.dy + radius * sin(angle));
       final inner = Offset(
@@ -1045,10 +1063,10 @@ class VisualClockPainter extends CustomPainter {
       canvas.drawLine(outer, inner, tickPaint);
     }
 
-    // 2. Arka Plan Rayı
+    // 2. Arka Plan Rayı (Açık gri ray)
     final trackRadius = radius - 16;
     final trackPaint = Paint()
-      ..color = const Color(0xFF2C2C2E)
+      ..color = const Color(0xFFE2E8F0)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 12.0;
     canvas.drawCircle(center, trackRadius, trackPaint);
@@ -1097,7 +1115,7 @@ class VisualClockPainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────
-// DİKEY SÜTUN ÇİZİCİ (CUSTOM PAINTER)
+// DİKEY SÜTUN ÇİZİCİ (CUSTOM PAINTER - BEYAZ TEMA)
 // ─────────────────────────────────────────────────────────────
 class VisualColumnPainter extends CustomPainter {
   final double progress;
@@ -1113,13 +1131,13 @@ class VisualColumnPainter extends CustomPainter {
     final rect = Offset.zero & size;
     final rrect = RRect.fromRectAndRadius(rect, Radius.circular(size.width / 2));
 
-    // Tüp Arka Planı
-    final bgPaint = Paint()..color = const Color(0xFF2C2C2E);
+    // Tüp Arka Planı (Açık Gri)
+    final bgPaint = Paint()..color = const Color(0xFFF1F5F9);
     canvas.drawRRect(rrect, bgPaint);
 
     // Dış Çerçeve
     final borderPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.2)
+      ..color = const Color(0xFFCBD5E1)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawRRect(rrect, borderPaint);
@@ -1156,7 +1174,7 @@ class VisualColumnPainter extends CustomPainter {
 
     // Seviye Çentikleri
     final tickPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.3)
+      ..color = const Color(0xFF94A3B8)
       ..strokeWidth = 1.5;
 
     for (int p = 1; p <= 3; p++) {

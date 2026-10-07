@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,9 +9,12 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../models/social_story_book.dart';
 import '../../services/social_story_service.dart';
+import '../../widgets/safe_image_widget.dart';
 import 'social_story_reader_screen.dart';
 import '../../theme/app_theme.dart';
 
+/// Sosyal Öykü Kitabı Düzenleyicisi
+/// (Sayfa ekleme, fotoğraf çekme/yükleme, ses kaydı yapma ve sayfaları yönetme)
 class SocialStoryBookEditorScreen extends StatefulWidget {
   final SocialStoryBook book;
 
@@ -96,18 +100,24 @@ class _SocialStoryBookEditorScreenState extends State<SocialStoryBookEditorScree
           ],
         ),
         actions: [
+          IconButton(
+            icon: Icon(Icons.add_circle_outline_rounded, color: themeColor, size: 26),
+            tooltip: 'Sayfa Ekle',
+            onPressed: () => _openPageEditorDialog(),
+          ),
           if (pages.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.only(right: 12, left: 4),
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: themeColor,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 ),
                 icon: const Icon(Icons.menu_book_rounded, size: 18),
-                label: const Text('Kitabı Oku', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('Kitabı Oku', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -143,7 +153,7 @@ class _SocialStoryBookEditorScreenState extends State<SocialStoryBookEditorScree
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Kendi çektiğin fotoğrafları ekleyerek, metnini yazarak ve sesini kaydederek ilk sayfanı oluşturabilirsin.',
+                      'Kendi çektiğin fotoğrafları ekleyerek, metnini yazarak ve sesini kaydederek istediğin kadar sayfa oluşturabilirsin.',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4),
                     ),
@@ -195,7 +205,7 @@ class _SocialStoryBookEditorScreenState extends State<SocialStoryBookEditorScree
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: _buildThumbnail(page.imagePath),
+                            child: buildSafeImage(page.imagePath, fit: BoxFit.cover),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -218,8 +228,8 @@ class _SocialStoryBookEditorScreenState extends State<SocialStoryBookEditorScree
                                       style: TextStyle(color: themeColor, fontWeight: FontWeight.bold, fontSize: 11),
                                     ),
                                   ),
+                                  const SizedBox(width: 6),
                                   if (page.audioPath != null && page.audioPath!.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                       decoration: BoxDecoration(
@@ -232,6 +242,22 @@ class _SocialStoryBookEditorScreenState extends State<SocialStoryBookEditorScree
                                           Icon(Icons.mic_rounded, size: 12, color: Colors.green.shade700),
                                           const SizedBox(width: 3),
                                           Text('Ses Kayıtlı', style: TextStyle(fontSize: 10, color: Colors.green.shade700, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                    ),
+                                  ] else ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.volume_up_rounded, size: 12, color: Colors.blue.shade700),
+                                          const SizedBox(width: 3),
+                                          Text('TTS Okuma', style: TextStyle(fontSize: 10, color: Colors.blue.shade700, fontWeight: FontWeight.bold)),
                                         ],
                                       ),
                                     ),
@@ -274,20 +300,6 @@ class _SocialStoryBookEditorScreenState extends State<SocialStoryBookEditorScree
         onPressed: () => _openPageEditorDialog(),
       ),
     );
-  }
-
-  Widget _buildThumbnail(String? path) {
-    if (path == null || path.isEmpty) {
-      return const Center(child: Icon(Icons.image_outlined, color: Colors.grey, size: 30));
-    }
-    if (path.startsWith('assets/')) {
-      return Image.asset(path, fit: BoxFit.cover);
-    }
-    final file = File(path);
-    if (file.existsSync()) {
-      return Image.file(file, fit: BoxFit.cover);
-    }
-    return const Center(child: Icon(Icons.broken_image_rounded, color: Colors.grey));
   }
 }
 
@@ -339,9 +351,16 @@ class _PageEditorModalState extends State<_PageEditorModal> {
         imageQuality: 85,
       );
       if (picked != null) {
-        setState(() {
-          _imagePath = picked.path;
-        });
+        if (kIsWeb) {
+          final bytes = await picked.readAsBytes();
+          setState(() {
+            _imagePath = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+          });
+        } else {
+          setState(() {
+            _imagePath = picked.path;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -355,8 +374,11 @@ class _PageEditorModalState extends State<_PageEditorModal> {
   Future<void> _startRecording() async {
     try {
       if (await _audioRecorder.hasPermission()) {
-        final dir = await getApplicationDocumentsDirectory();
-        final filePath = '${dir.path}/story_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        String filePath = '';
+        if (!kIsWeb) {
+          final dir = await getApplicationDocumentsDirectory();
+          filePath = '${dir.path}/story_audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        }
 
         await _audioRecorder.start(
           const RecordConfig(encoder: AudioEncoder.aacLc),
@@ -433,7 +455,7 @@ class _PageEditorModalState extends State<_PageEditorModal> {
     final themeColor = Color(widget.book.coverColorValue);
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.9,
+      height: MediaQuery.of(context).size.height * 0.92,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -452,7 +474,7 @@ class _PageEditorModalState extends State<_PageEditorModal> {
             children: [
               Text(
                 widget.existingPage == null ? 'Yeni Sayfa Ekle' : 'Sayfayı Düzenle',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textPrimary),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
               ),
               IconButton(
                 icon: const Icon(Icons.close_rounded),
@@ -460,181 +482,223 @@ class _PageEditorModalState extends State<_PageEditorModal> {
               ),
             ],
           ),
-          const Divider(),
+          const Divider(height: 1),
           Expanded(
             child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. FOTOĞRAF ALANI
-                  const Text('1. Sayfa Fotoğrafı', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  // 1. FOTOĞRAF ALANI (Kendi çektiği veya telefonunda olan fotoğraflar)
+                  const Text('1. Sayfa Fotoğrafı (Tek Bir Resim) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    height: 180,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
-                    ),
-                    child: _imagePath != null
-                        ? Stack(
-                            children: [
-                              Positioned.fill(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(18),
-                                  child: _imagePath!.startsWith('assets/')
-                                      ? Image.asset(_imagePath!, fit: BoxFit.cover)
-                                      : Image.file(File(_imagePath!), fit: BoxFit.cover),
-                                ),
-                              ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: CircleAvatar(
-                                  backgroundColor: Colors.black54,
-                                  radius: 18,
-                                  child: IconButton(
-                                    padding: EdgeInsets.zero,
-                                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 20),
-                                    onPressed: () => setState(() => _imagePath = null),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          )
-                        : Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: themeColor,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                  ),
-                                  icon: const Icon(Icons.camera_alt_rounded, size: 20),
-                                  label: const Text('Fotoğraf Çek'),
-                                  onPressed: () => _pickImage(ImageSource.camera),
-                                ),
-                                const SizedBox(width: 12),
-                                OutlinedButton.icon(
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: themeColor,
-                                    side: BorderSide(color: themeColor),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                  ),
-                                  icon: const Icon(Icons.photo_library_rounded, size: 20),
-                                  label: const Text('Galeriden Seç'),
-                                  onPressed: () => _pickImage(ImageSource.gallery),
-                                ),
-                              ],
+
+                  if (_imagePath != null)
+                    Stack(
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          height: 200,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: buildSafeImage(_imagePath, fit: BoxFit.contain),
+                          ),
+                        ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: CircleAvatar(
+                            backgroundColor: Colors.black54,
+                            radius: 16,
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                              onPressed: () => setState(() => _imagePath = null),
                             ),
                           ),
-                  ),
-                  const SizedBox(height: 18),
+                        ),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                icon: const Icon(Icons.camera_alt_rounded),
+                                label: const Text('Fotoğraf Çek'),
+                                onPressed: () => _pickImage(ImageSource.camera),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                                icon: const Icon(Icons.photo_library_rounded),
+                                label: const Text('Galeriden Seç'),
+                                onPressed: () => _pickImage(ImageSource.gallery),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
 
-                  // 2. METİN ALANI
-                  const Text('2. Sayfa Metni / Cümlesi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 20),
+
+                  // 2. METİN ALANI (Her sayfada bir metin)
+                  const Text('2. Sayfa Cümlesi / Metni *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _textCtrl,
                     maxLines: 3,
                     decoration: InputDecoration(
-                      hintText: 'Örn: Okul servisi geldiğinde sırayla kapıdan binerim.',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      hintText: 'Örn: Parkta salıncakta sırayla sallanırız ve birbirimize gülümseriz.',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
                     ),
                   ),
-                  const SizedBox(height: 18),
 
-                  // 3. SES KAYDI ALANI
-                  const Text('3. Kendi Sesinle Kayıt Yap (İsteğe Bağlı)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 20),
+
+                  // 3. SES KAYDI ALANI (Ses kaydı yapma veya TTS dinleme)
+                  const Text('3. Seslendirme (Kendi Sesinle Kaydet veya TTS) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 8),
+
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _isRecording ? Colors.red.shade50 : const Color(0xFFF1F5F9),
+                      color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: _isRecording ? Colors.red : Colors.grey.shade300),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
                     ),
-                    child: Row(
+                    child: Column(
                       children: [
-                        ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _isRecording ? Colors.red : themeColor,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        if (_isRecording) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 14,
+                                height: 14,
+                                decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Kayıt Yapılıyor: 00:${_recordSeconds.toString().padLeft(2, '0')} / 01:00',
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                              ),
+                            ],
                           ),
-                          icon: Icon(_isRecording ? Icons.stop_rounded : Icons.mic_rounded),
-                          label: Text(_isRecording ? 'Durdur (${_recordSeconds}s)' : 'Ses Kaydet'),
-                          onPressed: () {
-                            if (_isRecording) {
-                              _stopRecording();
-                            } else {
-                              _startRecording();
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 12),
-                        if (_audioPath != null) ...[
-                          IconButton(
-                            icon: const Icon(Icons.play_circle_fill_rounded, color: Colors.green, size: 36),
-                            tooltip: 'Dinle',
-                            onPressed: _playRecording,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 24),
-                            tooltip: 'Kaydı Sil',
-                            onPressed: () => setState(() => _audioPath = null),
-                          ),
-                        ] else
-                          const Expanded(
-                            child: Text(
-                              'Ses kaydı yapılmazsa metin otomatik seslendirilir.',
-                              style: TextStyle(fontSize: 12, color: Colors.grey),
+                          const SizedBox(height: 12),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
+                            icon: const Icon(Icons.stop_rounded),
+                            label: const Text('Kaydı Durdur'),
+                            onPressed: _stopRecording,
                           ),
+                        ] else if (_audioPath != null) ...[
+                          Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Colors.green, size: 26),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text('Özel Ses Kaydı Alındı! 🎙️', style: TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.play_circle_fill_rounded, color: Colors.blue, size: 30),
+                                tooltip: 'Dinle',
+                                onPressed: _playRecording,
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline_rounded, color: Colors.red, size: 22),
+                                tooltip: 'Kaydı Sil',
+                                onPressed: () => setState(() => _audioPath = null),
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          const Row(
+                            children: [
+                              Icon(Icons.mic_none_rounded, color: Color(0xFF64748B), size: 22),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Kendi sesinle okumak istersen kaydet, kaydetmezsen metin otomatik seslendirilecektir.',
+                                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              foregroundColor: themeColor,
+                              side: BorderSide(color: themeColor),
+                            ),
+                            icon: const Icon(Icons.mic_rounded),
+                            label: const Text('Mikrofon ile Sesini Kaydet'),
+                            onPressed: _startRecording,
+                          ),
+                        ],
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // KAYDET BUTONU
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: themeColor,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 2,
-                      ),
-                      onPressed: () {
-                        final text = _textCtrl.text.trim();
-                        final pageId = widget.existingPage?.id ?? 'page_${DateTime.now().millisecondsSinceEpoch}';
-                        final pageNum = widget.existingPage?.pageNumber ?? widget.book.pages.length + 1;
-
-                        final page = SocialStoryPage(
-                          id: pageId,
-                          text: text,
-                          imagePath: _imagePath,
-                          audioPath: _audioPath,
-                          isDone: widget.existingPage?.isDone ?? false,
-                          pageNumber: pageNum,
-                        );
-
-                        widget.onSaved(page);
-                        Navigator.pop(context);
-                      },
-                      child: const Text('Sayfayı Kaydet', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     ),
                   ),
                 ],
               ),
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: themeColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              icon: const Icon(Icons.check_rounded),
+              label: const Text('Sayfayı Kaydet', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              onPressed: () {
+                final text = _textCtrl.text.trim();
+                if (text.isEmpty && _imagePath == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Lütfen sayfaya en az bir metin veya fotoğraf ekleyiniz.')),
+                  );
+                  return;
+                }
+
+                final newPage = SocialStoryPage(
+                  id: widget.existingPage?.id ?? 'page_${DateTime.now().millisecondsSinceEpoch}',
+                  text: text,
+                  imagePath: _imagePath,
+                  audioPath: _audioPath,
+                  pageNumber: widget.existingPage?.pageNumber ?? (widget.book.pages.length + 1),
+                );
+
+                widget.onSaved(newPage);
+                Navigator.pop(context);
+              },
             ),
           ),
         ],

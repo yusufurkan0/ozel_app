@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/calendar_activity.dart';
 import '../../models/free_time_plan.dart';
+import '../../services/free_time_activity_info_service.dart';
 import '../../services/inactivity_help_service.dart';
 import '../../services/routine_calendar_service.dart';
 import '../../theme/app_theme.dart';
@@ -29,6 +31,9 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
   String _selectedActivityEmoji = '🎉';
   String _selectedDayTitle = '';
   final Map<int, String> _currentAnswers = {};
+
+  // 13 Adımlık Özet Liste Görünümü
+  FreeTimePlan? _showingSummaryPlan;
 
   // Kitapçık okuma modu (13 sayfalık adım adım rehber)
   FreeTimePlan? _activeBookletPlan;
@@ -82,10 +87,27 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
       _selectedActivityEmoji = emoji;
       _selectedDayTitle = dayTitle;
       _currentAnswers.clear();
-      _currentAnswers[1] = title;
-      _currentStep = 1; // 2. sorudan devam et (1. soru etkinlik adı zaten seçildi)
+
+      // 1. Soru: "Nereye gideceğim?" için seçilen etkinliğin mekan adını veya kendisini varsayılan yap
+      _currentAnswers[1] = title.contains('Sinema')
+          ? 'Yakındaki Sinema Salonu 🎬'
+          : (title.contains('Müze')
+              ? 'Kültür Merkezi / Müze 🏛️'
+              : (title.contains('Kafe')
+                  ? 'Merkezdeki Kafe ☕'
+                  : (title.contains('Park')
+                      ? 'Şehir Parkı / Doğa Alanı 🌳'
+                      : title)));
+
+      // 3. Soru: "Haftalık programımda serbest zamanlarım ne zaman?" için takvimden seçilen günü yerleştir
+      if (dayTitle.isNotEmpty) {
+        _currentAnswers[3] = dayTitle;
+      }
+
+      _currentStep = 1; // 2. sorudan devam et ("2. Neden gideceğim?")
       _isWizardActive = true;
       _activeBookletPlan = null;
+      _showingSummaryPlan = null;
     });
 
     _inactivityHelp.start(context);
@@ -115,7 +137,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
   }
 
   void _finishWizard() async {
-    // Boş kalan soru kontrolü
+    // Boş kalan soru kontrolü: "Boş yerler var ise boş yerleri tamamlaması için yönlendirecek."
     final missing = <int>[];
     for (int i = 1; i <= 13; i++) {
       if (!_currentAnswers.containsKey(i) || _currentAnswers[i]!.trim().isEmpty) {
@@ -154,24 +176,219 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
     _savedPlans.insert(0, newPlan);
     await FreeTimePlan.savePlans(_savedPlans);
 
+    // Adımlar tamamlandığında önce tüm adımların yer aldığı liste gösterilir
     setState(() {
       _isWizardActive = false;
-      _activeBookletPlan = newPlan;
-      _bookletPageIndex = 0;
+      _showingSummaryPlan = newPlan;
+      _activeBookletPlan = null;
     });
 
-    _speak('Tebrikler! 13 sayfalık serbest zaman planlama kitapçığın hazırlandı. Şimdi başla diyerek adım adım uygulayabilirsin.');
+    _speak('Tebrikler! 13 adımlık serbest zaman planın hazırlandı. Tüm adımları inceleyebilir ve Başla diyerek adım adım rehbere geçebilirsin.');
   }
 
   void _deletePlan(String id) async {
-    setState(() {
-      _savedPlans.removeWhere((p) => p.id == id);
-      if (_activeBookletPlan?.id == id) {
-        _activeBookletPlan = null;
-      }
-    });
-    await FreeTimePlan.savePlans(_savedPlans);
-    _speak('Etkinlik planı silindi.');
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Etkinlik Planını Sil', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Bu serbest zaman etkinliği planını silmek istediğinden emin misin?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sil', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() {
+        _savedPlans.removeWhere((p) => p.id == id);
+        if (_activeBookletPlan?.id == id) _activeBookletPlan = null;
+        if (_showingSummaryPlan?.id == id) _showingSummaryPlan = null;
+      });
+      await FreeTimePlan.savePlans(_savedPlans);
+      _speak('Etkinlik planı silindi.');
+    }
+  }
+
+  // Destek kişisinden ve dijital asistandan yardım isteme diyaloğu
+  void _showAssistanceDialog() async {
+    final prefs = await SharedPreferences.getInstance();
+    final coachPhone = prefs.getString('user_coach_phone') ?? '0555 123 4567';
+    final familyPhone = prefs.getString('user_family_phone') ?? '0555 987 6543';
+    final qData = FreeTimePlan.questions[_currentStep];
+    final qTitle = qData['question'] as String;
+    final options = qData['options'] as List<String>;
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.support_agent_rounded, color: Color(0xFF7C3AED), size: 28),
+            SizedBox(width: 8),
+            Text('Yardım ve Destek', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bu soruya ($qTitle) cevap verirken takıldın mı? Destek kişinden veya dijital asistandan yardım alabilirsin:',
+              style: const TextStyle(fontSize: 13.5, color: Color(0xFF475569)),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: Color(0xFFDCFCE7), child: Icon(Icons.phone_rounded, color: Color(0xFF16A34A))),
+              title: const Text('Destek Kişimi Ara', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: Text('Tel: $familyPhone / $coachPhone', style: const TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _speak('Destek kişinin telefon numarası aranıyor.');
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: Color(0xFFEDE9FE), child: Icon(Icons.smart_toy_rounded, color: Color(0xFF7C3AED))),
+              title: const Text('Dijital Asistan Önerisi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: Text(options.isNotEmpty ? 'Öneri: "${options.first}"' : 'En uygun seçeneği belirle', style: const TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                if (options.isNotEmpty) {
+                  _answerCurrentQuestion(options.first);
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Kapat'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Etkinlik Ayrıntı Rehberi (Sinema, Müze, Kafe vb. detayları)
+  void _showActivityDetailsModal() {
+    final info = FreeTimeActivityInfoService.getInfoFor(_selectedActivityTitle);
+    _speak('${info.title} açıldı. Yakındaki yerleri ve ipuçlarını dinleyebilirsin.');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.78,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  Text(info.emoji, style: const TextStyle(fontSize: 28)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      info.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1E293B)),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  // Yakındaki Mekanlar
+                  const Text(
+                    '📍 Yakındaki Mekanlar ve Salonlar',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF7C3AED)),
+                  ),
+                  const SizedBox(height: 8),
+                  ...info.places.map((p) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on_rounded, size: 18, color: Color(0xFF7C3AED)),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(p, style: const TextStyle(fontSize: 14, color: Color(0xFF334155)))),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 18),
+
+                  // Öne Çıkanlar (Vizyondaki filmler veya sergiler)
+                  const Text(
+                    '🍿 Vizyondaki Filmler & Öne Çıkanlar',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF16A34A)),
+                  ),
+                  const SizedBox(height: 8),
+                  ...info.highlights.map((h) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle_outline_rounded, size: 18, color: Color(0xFF16A34A)),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(h, style: const TextStyle(fontSize: 14, color: Color(0xFF334155)))),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 18),
+
+                  // İpuçları & Sesli Bilgilendirme
+                  const Text(
+                    '💡 Önemli İpuçları & Kurallar',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFFD97706)),
+                  ),
+                  const SizedBox(height: 8),
+                  ...info.tips.map((t) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.tips_and_updates_rounded, size: 18, color: Color(0xFFD97706)),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(t, style: const TextStyle(fontSize: 13.5, color: Color(0xFF475569)))),
+                          ],
+                        ),
+                      )),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -195,7 +412,12 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
               setState(() => _isWizardActive = false);
               _inactivityHelp.stop();
             } else if (_activeBookletPlan != null) {
-              setState(() => _activeBookletPlan = null);
+              setState(() {
+                _showingSummaryPlan = _activeBookletPlan;
+                _activeBookletPlan = null;
+              });
+            } else if (_showingSummaryPlan != null) {
+              setState(() => _showingSummaryPlan = null);
             } else {
               Navigator.pop(context);
             }
@@ -210,7 +432,9 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
               child: Text(
                 _isWizardActive
                     ? 'Etkinlik Planlama'
-                    : (_activeBookletPlan != null ? 'Rehber Kitapçık' : 'Serbest Zaman Planlama'),
+                    : (_activeBookletPlan != null
+                        ? 'Rehber Kitapçık'
+                        : (_showingSummaryPlan != null ? 'Tüm Adımların Listesi' : 'Serbest Zaman Planlama')),
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
               ),
@@ -218,7 +442,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
           ],
         ),
         actions: [
-          if (!_isWizardActive && _activeBookletPlan == null)
+          if (!_isWizardActive && _activeBookletPlan == null && _showingSummaryPlan == null)
             IconButton(
               icon: const Icon(Icons.calendar_month_rounded, color: AppColors.buttonIndigo),
               tooltip: 'Takvime Git',
@@ -226,19 +450,32 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen())).then((_) => _loadInitialData());
               },
             ),
-          if (_isWizardActive)
+          if (_isWizardActive) ...[
+            IconButton(
+              icon: const Icon(Icons.lightbulb_rounded, color: Colors.amber),
+              tooltip: 'Etkinlik Ayrıntıları & Rehber',
+              onPressed: _showActivityDetailsModal,
+            ),
+            IconButton(
+              icon: const Icon(Icons.support_agent_rounded, color: Color(0xFF7C3AED)),
+              tooltip: 'Destek Kişimden / Asistandan Yardım İste',
+              onPressed: _showAssistanceDialog,
+            ),
             TextButton.icon(
               icon: const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
               label: const Text('Bitir', style: TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.bold, fontSize: 15)),
               onPressed: _finishWizard,
             ),
+          ],
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _isWizardActive
               ? _buildWizardView()
-              : (_activeBookletPlan != null ? _buildBookletReaderView() : _buildMainListView()),
+              : (_showingSummaryPlan != null
+                  ? _buildSummaryListView(_showingSummaryPlan!)
+                  : (_activeBookletPlan != null ? _buildBookletReaderView() : _buildMainListView())),
     );
   }
 
@@ -512,25 +749,44 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF7C3AED),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            icon: const Icon(Icons.format_list_numbered_rounded, size: 18),
+                            label: const Text('13 Adımı Gör', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            onPressed: () {
+                              setState(() {
+                                _showingSummaryPlan = plan;
+                              });
+                            },
+                          ),
                         ),
-                        icon: const Icon(Icons.play_arrow_rounded, size: 24),
-                        label: const Text('Başla (Adım Adım Yönlendir)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        onPressed: () {
-                          setState(() {
-                            _activeBookletPlan = plan;
-                            _bookletPageIndex = 0;
-                          });
-                          _speak('${plan.activityTitle} rehberi açıldı. 1. sayfa.');
-                        },
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF7C3AED),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(vertical: 11),
+                            ),
+                            icon: const Icon(Icons.play_arrow_rounded, size: 20),
+                            label: const Text('Başla ▶️', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            onPressed: () {
+                              setState(() {
+                                _activeBookletPlan = plan;
+                                _bookletPageIndex = 0;
+                              });
+                              _speak('${plan.activityTitle} rehberi açıldı. 1. sayfa.');
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1090,7 +1346,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
     );
   }
 
-  /// 13 Adımlık Soru Sihirbazı Görünümü
+  /// 13 Adımlık Soru Sihirbazı Görünümü (Çalışma Kağıdına Göre Sıralı)
   Widget _buildWizardView() {
     final qData = FreeTimePlan.questions[_currentStep];
     final qTitle = qData['question'] as String;
@@ -1133,7 +1389,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
             minHeight: 8,
             borderRadius: BorderRadius.circular(6),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
           // Soru Kartı
           Container(
@@ -1168,10 +1424,57 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(qHint, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    InkWell(
+                      onTap: _showActivityDetailsModal,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.amber.shade300),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.lightbulb_rounded, size: 16, color: Colors.amber),
+                            const SizedBox(width: 6),
+                            Text('Ayrıntılar & İpuçları', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: _showAssistanceDialog,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEDE9FE),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFC4B5FD)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.support_agent_rounded, size: 16, color: Color(0xFF7C3AED)),
+                            SizedBox(width: 6),
+                            Text('Yardım İste', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9))),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
           // Seçenekler Listesi
           const Text('Hazır Seçeneklerden Dokunarak Seç:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF334155))),
@@ -1215,7 +1518,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
             );
           }),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           // Veya Kendi Yanıtını Yaz
           Container(
             padding: const EdgeInsets.all(16),
@@ -1308,6 +1611,158 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
     );
   }
 
+  /// 13 Adımın Listesi (Tüm Adımlar Özeti Görünümü)
+  /// Kullanıcı İsteği: "Adımlar tamamlandığında tüm adımların yer aldığı liste görebilecek. Sonra 'başla' dediğinde adım adım yönlendirme yapacak."
+  Widget _buildSummaryListView(FreeTimePlan plan) {
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        // Başlık Kartı
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF7C3AED), Color(0xFF6D28D9)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(color: const Color(0xFF7C3AED).withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(plan.activityEmoji, style: const TextStyle(fontSize: 32)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          plan.activityTitle,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                        ),
+                        if (plan.dayTitle.isNotEmpty)
+                          Text(plan.dayTitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(12)),
+                    child: const Text('13 / 13 Adım', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Tüm planlama adımların tamamlandı. Aşağıda tüm adımları görebilir, "Başla" tuşuna basarak etkinliği uygularken adım adım yönlendirmeden faydalanabilirsin.',
+                style: TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF7C3AED),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.play_circle_fill_rounded, size: 24),
+                  label: const Text('Başla (Adım Adım Yönlendir)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  onPressed: () {
+                    setState(() {
+                      _activeBookletPlan = plan;
+                      _bookletPageIndex = 0;
+                      _showingSummaryPlan = null;
+                    });
+                    _speak('${plan.activityTitle} rehberi açıldı. 1. sayfa.');
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+
+        // 13 Adımın Listesi
+        const Text(
+          '13 Planlama Adımın:',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1E293B)),
+        ),
+        const SizedBox(height: 10),
+        ...FreeTimePlan.questions.map((q) {
+          final stepNum = q['step'] as int;
+          final qTitle = q['question'] as String;
+          final icon = q['icon'] as String;
+          final ans = plan.answers[stepNum] ?? 'Belirtilmedi';
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7C3AED).withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(child: Text(icon, style: const TextStyle(fontSize: 20))),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          qTitle,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF64748B)),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          ans,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1E293B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF7C3AED), size: 20),
+                    tooltip: 'Seslendir',
+                    onPressed: () => _speak('$qTitle. Planın: $ans'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 16),
+
+        // Silme Seçeneği
+        Center(
+          child: TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFEF4444)),
+            icon: const Icon(Icons.delete_outline_rounded),
+            label: const Text('Bu Planı Sil'),
+            onPressed: () => _deletePlan(plan.id),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// 13 Sayfalık Sıralı Rehber Kitapçık Okuyucu Görünümü ("Başla" modu)
   Widget _buildBookletReaderView() {
     final plan = _activeBookletPlan!;
@@ -1319,7 +1774,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // Sayfa Başlığı & İlerleme
+          // Sayfa Başlığı, Özet Tuşu & Seslendir
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1327,10 +1782,25 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                 'Sayfa ${_bookletPageIndex + 1} / $totalPages',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF7C3AED)),
               ),
-              IconButton(
-                icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF7C3AED), size: 28),
-                tooltip: 'Sesli Oku',
-                onPressed: () => _speak('${currentQ['question']}. Cevabın: $answerText'),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.format_list_bulleted_rounded, size: 18),
+                    label: const Text('Tüm Adımlar'),
+                    onPressed: () {
+                      setState(() {
+                        _showingSummaryPlan = plan;
+                        _activeBookletPlan = null;
+                      });
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF7C3AED), size: 28),
+                    tooltip: 'Sesli Oku',
+                    onPressed: () => _speak('${currentQ['question']}. Cevabın: $answerText'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1445,7 +1915,10 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                   onPressed: () {
                     if (_bookletPageIndex == totalPages - 1) {
                       _speak('Harika! Serbest zaman planı kitapçığını başarıyla tamamladın. İyi eğlenceler!');
-                      setState(() => _activeBookletPlan = null);
+                      setState(() {
+                        _showingSummaryPlan = plan;
+                        _activeBookletPlan = null;
+                      });
                     } else {
                       setState(() => _bookletPageIndex++);
                       _speak('${FreeTimePlan.questions[_bookletPageIndex]['question']}. Cevabın: ${plan.answers[_bookletPageIndex + 1]}');
