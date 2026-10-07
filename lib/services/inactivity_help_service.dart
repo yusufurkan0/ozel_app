@@ -59,8 +59,6 @@ class InactivityHelpService {
     if (!context.mounted || _isDialogOpen) return;
     _isDialogOpen = true;
 
-    _speak('Yardım ister misin?');
-
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -93,7 +91,6 @@ class InactivityHelpService {
             onPressed: () {
               _isDialogOpen = false;
               Navigator.pop(ctx);
-              _speak('Pekala, kaldığın yerden devam edebilirsin.');
               reset(context);
             },
             child: const Text('Hayır, Devam Edeceğim', style: TextStyle(fontSize: 14, color: Color(0xFF64748B))),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/tts_service.dart';
+import '../../services/voice_dictation_service.dart';
 import '../../theme/app_theme.dart';
 
 /// Form Seçenekleri (Word Belgeleri)
@@ -97,7 +98,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
   bool _isListening = false;
   bool _sttAvailable = false;
   bool _isBotTyping = false;
-  bool _soundEnabled = true;
+  bool _soundEnabled = false; // Bot her şeyde otomatik konuşmasın; kullanıcı isterse butondan açabilir veya mesaja dokunup dinleyebilir
 
   // Çoklu seçim geçici durumu
   final Set<String> _selectedMultiOptions = {};
@@ -782,43 +783,51 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
     }
   }
 
-  // Sesli Konuşmayı Başlat / Durdur
+  // Sesli Konuşmayı Başlat / Durdur (Kusursuz Sesle Yazdırma)
   void _toggleListening() async {
-    if (!_sttAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mikrofon servisi hazır değil. Klavyeden yazabilirsiniz.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
     if (_isListening) {
-      await _speech.stop();
+      await VoiceDictationService().stopListening();
       _micPulseController.stop();
       setState(() => _isListening = false);
     } else {
-      setState(() => _isListening = true);
       _micPulseController.repeat(reverse: true);
-      try {
-        await _speech.listen(
-          onResult: (result) {
+      setState(() => _isListening = true);
+
+      final started = await VoiceDictationService().startListening(
+        onResult: (words) {
+          if (mounted && words.isNotEmpty) {
             setState(() {
-              _textController.text = result.recognizedWords;
+              _textController.text = words;
               _textController.selection = TextSelection.fromPosition(
                 TextPosition(offset: _textController.text.length),
               );
             });
-          },
-          listenOptions: stt.SpeechListenOptions(
-            listenMode: stt.ListenMode.dictation,
-            cancelOnError: false,
-            partialResults: true,
-          ),
-        );
-      } catch (e) {
-        debugPrint('STT Dinleme Hatası: $e');
+          }
+        },
+        onListeningChanged: (listening) {
+          if (mounted) {
+            setState(() => _isListening = listening);
+            if (!listening) {
+              _micPulseController.stop();
+            }
+          }
+        },
+        onError: (errMsg) {
+          if (mounted) {
+            _micPulseController.stop();
+            setState(() => _isListening = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(errMsg),
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        },
+      );
+
+      if (!started && mounted) {
         _micPulseController.stop();
         setState(() => _isListening = false);
       }

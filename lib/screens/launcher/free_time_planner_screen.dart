@@ -6,6 +6,7 @@ import '../../models/free_time_plan.dart';
 import '../../services/free_time_activity_info_service.dart';
 import '../../services/inactivity_help_service.dart';
 import '../../services/routine_calendar_service.dart';
+import '../../services/voice_dictation_service.dart';
 import '../../theme/app_theme.dart';
 import 'calendar_screen.dart';
 
@@ -31,6 +32,7 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
   String _selectedActivityEmoji = '🎉';
   String _selectedDayTitle = '';
   final Map<int, String> _currentAnswers = {};
+  bool _isListeningVoice = false; // Sesle yazdırma durumu
 
   // 13 Adımlık Özet Liste Görünümü
   FreeTimePlan? _showingSummaryPlan;
@@ -72,12 +74,6 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
         _savedPlans = plans;
         _isLoading = false;
       });
-
-      if (calSz.isNotEmpty && plans.isEmpty) {
-        _speak('Haftalık takviminde planladığın serbest zaman etkinliklerin var. Bir tanesini seçip detaylı planlamak ister misin?');
-      } else if (calSz.isEmpty && plans.isEmpty) {
-        _speak('Haftalık takviminde henüz bir serbest zaman etkinliği planlamamışsın. Şimdi takvime serbest zaman etkinliği ekleyebilir veya buradan yeni bir plan başlatabilirsin.');
-      }
     }
   }
 
@@ -111,7 +107,6 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
     });
 
     _inactivityHelp.start(context);
-    _speakStep();
   }
 
   void _speakStep() {
@@ -126,13 +121,48 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
     setState(() {
       _currentAnswers[_currentStep + 1] = answer;
     });
-    _speak('$answer seçildi.');
 
     if (_currentStep < FreeTimePlan.questions.length - 1) {
       setState(() {
         _currentStep++;
       });
-      _speakStep();
+    }
+  }
+
+  void _toggleVoiceDictation(TextEditingController controller) async {
+    if (_isListeningVoice) {
+      await VoiceDictationService().stopListening();
+      setState(() => _isListeningVoice = false);
+    } else {
+      setState(() => _isListeningVoice = true);
+      final started = await VoiceDictationService().startListening(
+        onResult: (words) {
+          if (mounted && words.isNotEmpty) {
+            setState(() {
+              controller.text = words;
+              controller.selection = TextSelection.fromPosition(
+                TextPosition(offset: controller.text.length),
+              );
+            });
+          }
+        },
+        onListeningChanged: (listening) {
+          if (mounted) {
+            setState(() => _isListeningVoice = listening);
+          }
+        },
+        onError: (errMsg) {
+          if (mounted) {
+            setState(() => _isListeningVoice = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(errMsg), duration: const Duration(seconds: 2)),
+            );
+          }
+        },
+      );
+      if (!started && mounted) {
+        setState(() => _isListeningVoice = false);
+      }
     }
   }
 
@@ -282,7 +312,6 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
   // Etkinlik Ayrıntı Rehberi (Sinema, Müze, Kafe vb. detayları)
   void _showActivityDetailsModal() {
     final info = FreeTimeActivityInfoService.getInfoFor(_selectedActivityTitle);
-    _speak('${info.title} açıldı. Yakındaki yerleri ve ipuçlarını dinleyebilirsin.');
 
     showModalBottomSheet(
       context: context,
@@ -800,7 +829,6 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
   void _showAddNewActivityModal() {
     // 12 Serbest Zaman Etkinliği (SZ listesi)
     final szActivities = CalendarActivity.predefinedActivities.where((a) => a.isFreeTime).toList();
-    _speak('Hangi serbest zaman etkinliğini yapmak istiyorsun? Listeden bir etkinlik seç.');
 
     showModalBottomSheet(
       context: context,
@@ -878,8 +906,6 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
 
     // Varsayılan olarak bugünün gününü seçelim (0: Pazartesi .. 6: Pazar)
     int selectedDayIndex = (DateTime.now().weekday - 1).clamp(0, 6);
-
-    _speak('Yeşil renkli yerlerden seç. Takvimde uygun boşluklar yeşil renkle gösterilmiştir.');
 
     if (!mounted) return;
 
@@ -1031,7 +1057,6 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                           setModalState(() {
                             selectedDayIndex = dIdx;
                           });
-                          _speak('${RoutineCalendarService.dayNames[dIdx]} günü seçildi.');
                         },
                         child: Container(
                           width: 68,
@@ -1160,8 +1185,6 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                                 Navigator.pop(ctx);
                               }
 
-                              // 4. Sesli ve görsel bildirim
-                              _speak('$dayName $slotTitle seçildi. Şimdi soruları cevaplayalım.');
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -1530,18 +1553,41 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
+                    // Mikrofon ile Sesle Yazdırma
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      decoration: BoxDecoration(
+                        color: _isListeningVoice ? const Color(0xFFFEE2E2) : const Color(0xFFF5F3FF),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _isListeningVoice ? const Color(0xFFEF4444) : const Color(0xFFDDD6FE),
+                        ),
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          _isListeningVoice ? Icons.mic_rounded : Icons.mic_none_rounded,
+                          color: _isListeningVoice ? const Color(0xFFEF4444) : const Color(0xFF7C3AED),
+                          size: 24,
+                        ),
+                        tooltip: _isListeningVoice ? 'Dinleniyor (Durdur)' : 'Sesle Yazdır (Mikrofon)',
+                        onPressed: () => _toggleVoiceDictation(textCtrl),
+                      ),
+                    ),
                     Expanded(
                       child: TextField(
                         controller: textCtrl,
                         decoration: InputDecoration(
-                          hintText: 'Cevabını buraya yaz...',
+                          hintText: _isListeningVoice ? 'Seni dinliyorum, konuş...' : 'Cevabını buraya yaz...',
+                          hintStyle: TextStyle(
+                            color: _isListeningVoice ? const Color(0xFFEF4444) : const Color(0xFF94A3B8),
+                          ),
                           filled: true,
-                          fillColor: const Color(0xFFF8FAFC),
+                          fillColor: _isListeningVoice ? const Color(0xFFFEF2F2) : const Color(0xFFF8FAFC),
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF7C3AED),
@@ -1550,6 +1596,9 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       ),
                       onPressed: () {
+                        if (_isListeningVoice) {
+                          _toggleVoiceDictation(textCtrl);
+                        }
                         final val = textCtrl.text.trim();
                         if (val.isNotEmpty) {
                           _answerCurrentQuestion(val);
