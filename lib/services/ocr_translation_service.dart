@@ -51,6 +51,10 @@ class OcrTranslationService {
   factory OcrTranslationService() => _instance;
   OcrTranslationService._internal();
 
+  TextRecognizer? _cachedRecognizer;
+  TextRecognizer get _textRecognizer =>
+      _cachedRecognizer ??= TextRecognizer(script: TextRecognitionScript.latin);
+
   /// Resim dosyasından metin tanıma (OCR).
   Future<String> recognizeText(String imagePath) async {
     if (imagePath.isEmpty) return '';
@@ -68,12 +72,8 @@ class OcrTranslationService {
       }
 
       final inputImage = InputImage.fromFilePath(imagePath);
-      final textRecognizer =
-          TextRecognizer(script: TextRecognitionScript.latin);
       final RecognizedText recognizedText =
-          await textRecognizer.processImage(inputImage);
-      await textRecognizer.close();
-
+          await _textRecognizer.processImage(inputImage);
       return recognizedText.text.trim();
     } catch (e) {
       debugPrint('OCR Text Recognition hatası (fallback devrede): $e');
@@ -99,11 +99,8 @@ class OcrTranslationService {
       }
 
       final inputImage = InputImage.fromFilePath(imagePath);
-      final textRecognizer =
-          TextRecognizer(script: TextRecognitionScript.latin);
       final RecognizedText recognizedText =
-          await textRecognizer.processImage(inputImage);
-      await textRecognizer.close();
+          await _textRecognizer.processImage(inputImage);
 
       // Tüm satırları kutularıyla topla
       final allLines = <TextLine>[];
@@ -377,7 +374,7 @@ class OcrTranslationService {
       final uri = Uri.parse(
         'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(query)}&langpair=en|tr',
       );
-      final res = await http.get(uri).timeout(const Duration(seconds: 5));
+      final res = await http.get(uri).timeout(const Duration(milliseconds: 1200));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final responseData = data['responseData'] as Map<String, dynamic>?;

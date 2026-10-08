@@ -892,11 +892,23 @@ class _LostSosScreenState extends State<LostSosScreen> {
             Navigator.pop(context);
           },
         ),
+        titleSpacing: 0,
         title: const Row(
           children: [
-            Icon(Icons.location_on_rounded, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Kayboldum! Ne Yapmalıyım?', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
+            Icon(Icons.location_on_rounded, color: Colors.red, size: 22),
+            SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Kayboldum! Ne Yapmalıyım?',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16.5,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -919,7 +931,7 @@ class _LostSosScreenState extends State<LostSosScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 48),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

@@ -1181,19 +1181,18 @@ class _FreeTimePlannerScreenState extends State<FreeTimePlannerScreen> {
                               await _loadInitialData();
 
                               // 3. Modalı kapat
-                              if (mounted && Navigator.canPop(ctx)) {
+                              if (ctx.mounted && Navigator.canPop(ctx)) {
                                 Navigator.pop(ctx);
                               }
 
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text('🎉 ${selectedActivity.title}, $dayName takvimine eklendi!'),
                                     backgroundColor: const Color(0xFF16A34A),
                                     behavior: SnackBarBehavior.floating,
                                   ),
                                 );
-                              }
 
                               // 5. 13 Adımlık Soru Sihirbazını Başlat
                               final fullDayTitle = '${RoutineCalendarService.formatDayHeader(currentMonday, selectedDayIndex)} • $slotTitle';

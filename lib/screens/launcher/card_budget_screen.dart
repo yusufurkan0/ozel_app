@@ -455,7 +455,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Seçilen tarih ayın ${_cutoffDay}. gününden sonra olduğu için bu harcama bir sonraki ayın ekstresine eklenecektir.',
+                              'Seçilen tarih ayın $_cutoffDay. gününden sonra olduğu için bu harcama bir sonraki ayın ekstresine eklenecektir.',
                               style: const TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.w600),
                             ),
                           ),
@@ -885,7 +885,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
                                     child: Text(
-                                      'Kesim: ${_cutoffDay}. Gün',
+                                      'Kesim: $_cutoffDay. Gün',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
@@ -901,7 +901,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
                               child: Text(
-                                'Son Ödeme: ${_dueDay}. Gün',
+                                'Son Ödeme: $_dueDay. Gün',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ozel_app/models/calendar_activity.dart';
-import 'package:ozel_app/models/free_time_plan.dart';
 import 'package:ozel_app/screens/launcher/free_time_planner_screen.dart';
 import 'package:ozel_app/services/routine_calendar_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';

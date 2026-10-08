@@ -64,7 +64,7 @@ class RoutineCalendarService {
   }
 
   /// Haftalık takvim verilerini yükler
-  /// Dönen yapı: dayIndex (0..6) -> slotIndex (0..4) -> List<CalendarActivity> (en fazla 3)
+  /// Dönen yapı: dayIndex (0..6) -> slotIndex (0..4) -> `List<CalendarActivity>` (en fazla 3)
   static Future<Map<int, Map<int, List<CalendarActivity>>>> loadWeekSchedule(DateTime monday) async {
     final prefs = await SharedPreferences.getInstance();
     final weekKey = '$_storagePrefix${monday.year}_${monday.month}_${monday.day}';

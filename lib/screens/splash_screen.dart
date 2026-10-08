@@ -5,7 +5,6 @@ import '../services/game_progress_service.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'parent_dashboard_screen.dart';
-import 'login_screen.dart';
 import '../services/auth_service.dart';
 import '../services/parent_child_sync_service.dart';
 

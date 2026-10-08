@@ -96,7 +96,6 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
   final Map<String, dynamic> _answers = {};
 
   bool _isListening = false;
-  bool _sttAvailable = false;
   bool _isBotTyping = false;
   bool _soundEnabled = false; // Bot her şeyde otomatik konuşmasın; kullanıcı isterse butondan açabilir veya mesaja dokunup dinleyebilir
 
@@ -123,7 +122,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
   Future<void> _initServices() async {
     await _tts.initialize();
     try {
-      final available = await _speech.initialize(
+      await _speech.initialize(
         onError: (err) => debugPrint('STT Hata: $err'),
         onStatus: (status) {
           if (status == 'done' || status == 'notListening') {
@@ -135,7 +134,6 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
         },
       );
       if (mounted) {
-        setState(() => _sttAvailable = available);
       }
     } catch (e) {
       debugPrint('STT Başlatma Hatası: $e');
@@ -1702,7 +1700,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
         shrinkWrap: true,
         padding: const EdgeInsets.all(14),
         itemCount: options.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
           final opt = options[index];
           return InkWell(
@@ -2000,7 +1998,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
               : ListView.separated(
                   shrinkWrap: true,
                   itemCount: _answers.entries.length,
-                  separatorBuilder: (_, __) => const Divider(height: 16),
+                  separatorBuilder: (_, _) => const Divider(height: 16),
                   itemBuilder: (context, i) {
                     final entry = _answers.entries.elementAt(i);
                     final matchedQ = _currentQuestions.cast<EvalQuestion?>().firstWhere(
@@ -2115,7 +2113,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
                     : ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: rawList.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
                         itemBuilder: (context, i) {
                           try {
                             final item = jsonDecode(rawList[i]) as Map<String, dynamic>;

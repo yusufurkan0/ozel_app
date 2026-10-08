@@ -29,7 +29,6 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   // Kronometre Durumu
   Timer? _stepTimer;
   int _timerRemainingSeconds = 0;
-  int _timerTotalSeconds = 0;
   bool _isTimerRunning = false;
   bool _timerCompleted = false;
 
@@ -63,14 +62,12 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
     final step = widget.recipe.steps[_currentStepIndex];
     if (step.timerSeconds != null && step.timerSeconds! > 0) {
       setState(() {
-        _timerTotalSeconds = step.timerSeconds!;
         _timerRemainingSeconds = step.timerSeconds!;
         _isTimerRunning = false;
         _timerCompleted = false;
       });
     } else {
       setState(() {
-        _timerTotalSeconds = 0;
         _timerRemainingSeconds = 0;
         _isTimerRunning = false;
         _timerCompleted = false;
@@ -131,7 +128,6 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
     _inactivityHelp.reset(context);
     setState(() {
       _timerRemainingSeconds += seconds;
-      _timerTotalSeconds += seconds;
       _timerCompleted = false;
     });
   }
@@ -139,35 +135,60 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   void _onTimerFinished() async {
     _speak('Süre doldu! Harika, şimdi sıradaki adıma geçebilirsin.');
     if (!mounted) return;
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: const Row(
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.alarm_on_rounded, color: Colors.green, size: 32),
-            SizedBox(width: 10),
-            Text('Süre Doldu!', style: TextStyle(fontWeight: FontWeight.bold)),
+            Center(
+              child: Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.alarm_on_rounded, color: Colors.green, size: 36),
+                SizedBox(width: 10),
+                Text('Süre Doldu!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Tebrikler! Belirlenen süre tamamlandı. Bir sonraki adıma geçmeye hazırsın.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _nextStep();
+              },
+              child: const Text('Sıradaki Adıma Geç ▶', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
           ],
         ),
-        content: const Text(
-          'Tebrikler! Belirlenen süre tamamlandı. Bir sonraki adıma geçmeye hazırsın.',
-          style: TextStyle(fontSize: 16),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _nextStep();
-            },
-            child: const Text('Sıradaki Adıma Geç ▶'),
-          ),
-        ],
       ),
     );
   }
@@ -236,6 +257,75 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
     }
   }
 
+  void _showStepImagePreviewDialog(BuildContext context, String imagePath, String title, int stepNum) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Center(
+              child: Container(
+                width: 48,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Adım $stepNum - $title',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 26),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white12, height: 1),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4.0,
+                  child: Center(
+                    child: Image.asset(
+                      imagePath,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showRecipeCompletedDialog() {
     _speak('Tebrikler! Tarifin tüm adımlarını başarıyla tamamladın! Afiyet olsun!');
     showModalBottomSheet(
@@ -277,7 +367,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                 child: Image.asset(
                   'assets/images/lezzet/crouton_bread.png',
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (_, _, _) => const Icon(
                     Icons.emoji_events_rounded,
                     color: Colors.amber,
                     size: 54,
@@ -503,10 +593,24 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
               ),
             ),
 
-            // Adım Detay Kartı
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                transitionBuilder: (child, animation) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.0, 0.05),
+                      end: Offset.zero,
+                    ).animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: FadeTransition(opacity: animation, child: child),
+                  );
+                },
+                child: SingleChildScrollView(
+                  key: ValueKey<int>(_currentStepIndex),
+                  padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -529,39 +633,78 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                         children: [
                           // Adım Görseli / Fotoğrafı (Görsel Anlatım)
                           if (currentStep.imagePath != null) ...[
-                            Container(
-                              width: double.infinity,
-                              constraints: const BoxConstraints(maxHeight: 260),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: widget.recipe.themeColor.withValues(alpha: 0.3),
-                                  width: 2,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.06),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
+                            GestureDetector(
+                              onTap: () => _showStepImagePreviewDialog(
+                                context,
+                                currentStep.imagePath!,
+                                widget.recipe.title,
+                                _currentStepIndex + 1,
                               ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
-                                child: Image.asset(
-                                  currentStep.imagePath!,
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (_, __, ___) => Container(
-                                    height: 120,
-                                    alignment: Alignment.center,
-                                    color: widget.recipe.themeColor.withValues(alpha: 0.1),
-                                    child: Icon(
-                                      currentStep.icon,
-                                      color: widget.recipe.themeColor,
-                                      size: 56,
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    width: double.infinity,
+                                    constraints: const BoxConstraints(maxHeight: 260),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(
+                                        color: widget.recipe.themeColor.withValues(alpha: 0.3),
+                                        width: 2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.06),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: Image.asset(
+                                        currentStep.imagePath!,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, _, _) => Container(
+                                          height: 120,
+                                          alignment: Alignment.center,
+                                          color: widget.recipe.themeColor.withValues(alpha: 0.1),
+                                          child: Icon(
+                                            currentStep.icon,
+                                            color: widget.recipe.themeColor,
+                                            size: 56,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+                                  Positioned(
+                                    right: 12,
+                                    bottom: 12,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.65),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Büyüt',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             const SizedBox(height: 18),
@@ -778,6 +921,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                 ),
               ),
             ),
+          ),
 
             // Alt Navigasyon Çubuğu
             Container(

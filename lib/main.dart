@@ -32,17 +32,18 @@ class OzelApp extends StatelessWidget {
         }),
         ChangeNotifierProvider.value(value: VisualTimerService.instance),
       ],
-      child: Consumer<GameProgressService>(
-        builder: (context, game, _) {
+      child: Selector<GameProgressService, ({int buttonSize, int themeIndex})>(
+        selector: (_, s) => (buttonSize: s.buttonSize, themeIndex: s.themeIndex),
+        builder: (context, settings, _) {
           // 0: Küçük (0.88), 1: Standart (1.05), 2: Büyük (1.25)
-          final textScale = game.buttonSize == 0
+          final textScale = settings.buttonSize == 0
               ? 0.88
-              : (game.buttonSize == 2 ? 1.25 : 1.05);
+              : (settings.buttonSize == 2 ? 1.25 : 1.05);
 
           return MaterialApp(
             title: 'Özel İletişim & Yaşam Rehberi',
             debugShowCheckedModeBanner: false,
-            theme: AppTheme.getTheme(game.themeIndex),
+            theme: AppTheme.getTheme(settings.themeIndex),
             builder: (context, child) {
               return MediaQuery(
                 data: MediaQuery.of(context).copyWith(

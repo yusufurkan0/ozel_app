@@ -15,53 +15,6 @@ class _GamesSocialStoriesScreenState extends State<GamesSocialStoriesScreen>
   final FlutterTts _tts = FlutterTts();
   late TabController _tabCtrl;
 
-  // Sosyal Öyküler Listesi
-  final List<Map<String, dynamic>> _stories = [
-    {
-      'title': 'Okula Hazırlanıyorum',
-      'icon': Icons.backpack_rounded,
-      'color': Colors.blue,
-      'steps': [
-        '1. Sabah uyanınca yüzümü yıkarım ve dişlerimi fırçalarım.',
-        '2. Kıyafetlerimi giyer ve çantamı kontrol ederim.',
-        '3. Kahvaltımı yapıp aileme "Görüşürüz" derim.',
-        '4. Okulda öğretmenime ve arkadaşlarıma gülümserim.',
-      ],
-    },
-    {
-      'title': 'Sıramı Bekliyorum',
-      'icon': Icons.hourglass_bottom_rounded,
-      'color': Colors.orange,
-      'steps': [
-        '1. Bir etkinlik veya oyun için sıraya girerim.',
-        '2. Sıra bana gelene kadar sakin ve sabırlı beklerim.',
-        '3. Kimseyi itmem, başkasının önüne geçmem.',
-        '4. Sıram gelince neşeyle oyunumu oynarım.',
-      ],
-    },
-    {
-      'title': 'Arkadaşımla Paylaşıyorum',
-      'icon': Icons.favorite_rounded,
-      'color': Colors.pink,
-      'steps': [
-        '1. Oyuncaklarımı arkadaşlarımla birlikte oynamak güzeldir.',
-        '2. "Birlikte oynayalım mı?" diye sorarım.',
-        '3. Birbirimize teşekkür eder ve sırayla oynarız.',
-        '4. Paylaşmak bizi mutlu birer dost yapar.',
-      ],
-    },
-    {
-      'title': 'Doktora Gidiyorum',
-      'icon': Icons.medical_services_rounded,
-      'color': Colors.teal,
-      'steps': [
-        '1. Doktorlar sağlığımızı korumak için bize yardımcı olur.',
-        '2. Doktor kalbimi dinlerken derin nefes alırım.',
-        '3. Sakin durduğumda muayene hemen biter.',
-        '4. Muayene bittiğinde kendimle gurur duyarım.',
-      ],
-    },
-  ];
 
   // Eğitici Mini Oyunlar Listesi
   final List<Map<String, dynamic>> _games = [
@@ -115,75 +68,6 @@ class _GamesSocialStoriesScreenState extends State<GamesSocialStoriesScreen>
     } catch (_) {}
   }
 
-  void _openStory(Map<String, dynamic> story) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: (story['color'] as Color).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(story['icon'] as IconData, color: story['color'] as Color, size: 28),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                story['title'] as String,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-              ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              ...((story['steps'] as List<String>).map((step) => Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(step, style: const TextStyle(fontSize: 14, height: 1.3)),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF1E3A8A), size: 20),
-                      onPressed: () => _speak(step),
-                    ),
-                  ],
-                ),
-              ))),
-            ],
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1E3A8A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Tamam'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _launchMiniGame(Map<String, dynamic> game) {
     _speak('${game['title']} oyunu başlatılıyor.');

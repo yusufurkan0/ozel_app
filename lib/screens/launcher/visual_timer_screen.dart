@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import '../../services/timer_service.dart';
-import '../../theme/app_theme.dart';
 
 /// Temiz, aydınlık ve beyaz temalı; tekli veya çift sayaçlı,
 /// görsel azalan süreli (Dairesel Saat ve Dikey Sütun) ve seçilebilir müzikli zamanlayıcı ekranı.
@@ -160,7 +159,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _quickPresets.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final mins = _quickPresets[i];
           final isSelected = service.timer1.totalSeconds == mins * 60;
@@ -964,7 +963,7 @@ class _VisualTimerScreenState extends State<VisualTimerScreen> with TickerProvid
                     child: ListView.separated(
                       padding: const EdgeInsets.all(16),
                       itemCount: kAvailableSounds.length,
-                      separatorBuilder: (_, __) => const Divider(color: Color(0xFFE2E8F0), height: 1),
+                      separatorBuilder: (_, _) => const Divider(color: Color(0xFFE2E8F0), height: 1),
                       itemBuilder: (context, index) {
                         final sound = kAvailableSounds[index];
                         final isSelected = timer.soundKey == sound.key;

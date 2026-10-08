@@ -163,7 +163,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 itemCount: CalendarActivity.predefinedActivities.length,
-                itemBuilder: (context, idx) {
+                itemBuilder: (_, idx) {
                   final act = CalendarActivity.predefinedActivities[idx];
                   return Container(
                     margin: const EdgeInsets.only(bottom: 8),
@@ -206,6 +206,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           _schedule[dayIndex]![slotIndex]!.add(act);
                         });
                         await RoutineCalendarService.saveWeekSchedule(_currentMonday, _schedule);
+                        if (!mounted) return;
                         _inactivityHelp.reset(context);
                         _speak('${act.title} eklendi.');
                       },

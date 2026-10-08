@@ -265,8 +265,15 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen>
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => KitchenRecipeDetailScreen(recipe: recipe),
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation, secondaryAnimation) =>
+                              KitchenRecipeDetailScreen(recipe: recipe),
+                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                            const begin = Offset(0.0, 1.0);
+                            const end = Offset.zero;
+                            final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeOutCubic));
+                            return SlideTransition(position: animation.drive(tween), child: child);
+                          },
                         ),
                       ).then((_) => setState(() {}));
                     },
@@ -291,7 +298,7 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen>
                                         child: Image.asset(
                                           recipe.coverImagePath!,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
+                                          errorBuilder: (_, _, _) =>
                                               Icon(recipe.icon, color: recipe.themeColor, size: 30),
                                         ),
                                       )
@@ -404,8 +411,15 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen>
                               onPressed: () {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (_) => KitchenRecipeDetailScreen(recipe: recipe),
+                                  PageRouteBuilder(
+                                    pageBuilder: (context, animation, secondaryAnimation) =>
+                                        KitchenRecipeDetailScreen(recipe: recipe),
+                                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                      const begin = Offset(0.0, 1.0);
+                                      const end = Offset.zero;
+                                      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeOutCubic));
+                                      return SlideTransition(position: animation.drive(tween), child: child);
+                                    },
                                   ),
                                 ).then((_) => setState(() {}));
                               },

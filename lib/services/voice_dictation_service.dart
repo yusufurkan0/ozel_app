@@ -79,14 +79,14 @@ class VoiceDictationService {
             onListeningChanged(false);
           }
         },
-        localeId: _selectedLocaleId,
         listenOptions: stt.SpeechListenOptions(
           listenMode: stt.ListenMode.dictation,
           cancelOnError: false,
           partialResults: true,
+          localeId: _selectedLocaleId,
+          listenFor: const Duration(seconds: 40),
+          pauseFor: const Duration(seconds: 4),
         ),
-        listenFor: const Duration(seconds: 40),
-        pauseFor: const Duration(seconds: 4),
       );
       return true;
     } catch (e) {

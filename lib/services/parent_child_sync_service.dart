@@ -292,7 +292,7 @@ class ParentChildSyncService extends ChangeNotifier {
     }
 
     // Web veya ebeveyn panelinde masaüstü sunucusundan olayları çekmek için periyodik polling
-    Timer.periodic(const Duration(milliseconds: 1000), (_) async {
+    Timer.periodic(const Duration(milliseconds: 3000), (_) async {
       await fetchRemoteEvents();
     });
 
@@ -486,6 +486,10 @@ class ParentChildSyncService extends ChangeNotifier {
 
   /// Uzak cihazdan (veya aynı bilgisayardaki Windows sunucusundan) son olayları çek
   Future<void> fetchRemoteEvents() async {
+    // Çevrimdışı ve tekli (standalone) modda gereksiz ağ/soket sorgusu yapma
+    if (_currentRole == DeviceRole.standalone || _pairedHostIp.isEmpty || _pairedHostIp == '127.0.0.1') {
+      return;
+    }
     final targets = <String>{};
     targets.add('http://127.0.0.1:$_localPort/api/events');
     if (_pairedHostIp.isNotEmpty && _pairedHostIp != '127.0.0.1') {

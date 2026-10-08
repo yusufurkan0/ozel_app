@@ -231,17 +231,18 @@ class _SocialStoryLibraryScreenState extends State<SocialStoryLibraryScreen> {
 
                 await _service.saveBook(newBook);
                 if (ctx.mounted) Navigator.pop(ctx);
+                if (!context.mounted) return;
                 setState(() {});
 
                 // Kitap oluştuktan sonra doğrudan sayfa ekleme ekranını aç
-                if (mounted) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SocialStoryBookEditorScreen(book: newBook),
-                    ),
-                  ).then((_) => setState(() {}));
-                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SocialStoryBookEditorScreen(book: newBook),
+                  ),
+                ).then((_) {
+                  if (mounted) setState(() {});
+                });
               },
               child: const Text('Oluştur'),
             ),

@@ -49,13 +49,9 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   // Fiş Tarama & Görsel İşleme Durumları
   String? _scannedReceiptImage;
   double? _scannedReceiptTotal;
-  String? _scannedReceiptRawText;
   bool _isScanningReceipt = false;
 
   // Fiyat Etiketi Tarama Durumları
-  bool _isScanningPriceTag = false;
-  String? _scannedPriceTagImage;
-  String? _scannedPriceTagRawText;
 
   // Haftalık ve Sabah Rutini Durumları
   String _currentWeekLabel = '';
@@ -272,7 +268,6 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
       _changeDue = 0;
       _scannedReceiptImage = null;
       _scannedReceiptTotal = null;
-      _scannedReceiptRawText = null;
       _isScanningReceipt = false;
     });
     _inactivityHelp.start(context);
@@ -600,18 +595,40 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   Future<void> _processPriceTagFromImage(ImageSource source) async {
     try {
       final picker = ImagePicker();
-      final photo = await picker.pickImage(source: source);
+      final photo = await picker.pickImage(
+        source: source,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 85,
+      );
       if (photo == null) return;
 
-      setState(() => _isScanningPriceTag = true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                ),
+                SizedBox(width: 12),
+                Text('🔍 Fiyat etiketi taranıyor...', style: TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            duration: Duration(milliseconds: 1500),
+            backgroundColor: Color(0xFF2563EB),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
 
       final rawText = await OcrTranslationService().recognizeText(photo.path);
+      if (mounted) ScaffoldMessenger.of(context).hideCurrentSnackBar();
       final tagData = _extractPriceFromTag(rawText);
 
       setState(() {
-        _isScanningPriceTag = false;
-        _scannedPriceTagImage = photo.path;
-        _scannedPriceTagRawText = rawText;
       });
 
       _showDetectedPriceTagConfirmation(
@@ -622,7 +639,6 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
         roundedPrice: tagData['roundedPrice'] as int,
       );
     } catch (_) {
-      setState(() => _isScanningPriceTag = false);
       _simulatePriceTagScan();
     }
   }
@@ -632,8 +648,6 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
     final tagData = _extractPriceFromTag(rawText);
 
     setState(() {
-      _scannedPriceTagImage = null;
-      _scannedPriceTagRawText = rawText;
     });
 
     _showDetectedPriceTagConfirmation(
@@ -751,12 +765,16 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Row(
           children: [
-            Icon(isReceipt ? Icons.receipt_long_rounded : Icons.camera_alt_rounded, color: const Color(0xFF2563EB)),
+            Icon(isReceipt ? Icons.receipt_long_rounded : Icons.camera_alt_rounded, color: const Color(0xFF2563EB), size: 24),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                isReceipt ? 'Alışveriş Fişi Okundu! 🧾' : 'Fiyat Etiketi Okundu! 📸',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  isReceipt ? 'Alışveriş Fişi Okundu! 🧾' : 'Fiyat Etiketi Okundu! 📸',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                ),
               ),
             ),
           ],
@@ -808,26 +826,66 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                 child: Column(
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Text('Ürün:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF166534))),
-                        Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF166534), fontSize: 16)),
+                        const Text('Ürün:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF166534), fontSize: 14)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            name,
+                            textAlign: TextAlign.end,
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF166534), fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
-                    const Divider(height: 16),
+                    const Divider(height: 18),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Text('Virgülün Solundaki Rakam:'),
-                        Text('$rawPrice TL', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                        const Expanded(
+                          child: Text(
+                            'Virgülün Solundaki Rakam:',
+                            style: TextStyle(fontSize: 13, color: Color(0xFF334155), fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E8F0),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$rawPrice TL',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: Color(0xFF1E293B)),
+                          ),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Text('+1 TL Yuvarlama (Kural):', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
-                        Text('$roundedPrice TL', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF16A34A))),
+                        const Expanded(
+                          child: Text(
+                            '+1 TL Yuvarlama (Kural):',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF166534)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDCFCE7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$roundedPrice TL',
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16.5, color: Color(0xFF15803D)),
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -836,41 +894,50 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
             ],
           ),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('İptal', style: TextStyle(color: Color(0xFF64748B))),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF16A34A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
-            label: const Text('Sepete Ekle & Topla ✅', style: TextStyle(fontWeight: FontWeight.bold)),
-            onPressed: () {
-              Navigator.pop(ctx);
-              setState(() {
-                _cartItems.add({
-                  'name': name,
-                  'rawPrice': rawPrice,
-                  'roundedPrice': roundedPrice,
-                });
-                if (!_isShoppingMode) {
-                  _isShoppingMode = true;
-                }
-              });
-              final total = _cartItems.fold<int>(0, (sum, i) => sum + (i['roundedPrice'] as int));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF16A34A),
-                  content: Text('$name sepete eklendi! Toplam Harcama: $total TL 🛒'),
-                  duration: const Duration(seconds: 2),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 0,
                 ),
-              );
-            },
+                icon: const Icon(Icons.add_shopping_cart_rounded, size: 18),
+                label: const Text('Sepete Ekle & Topla ✅', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5)),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    _cartItems.add({
+                      'name': name,
+                      'rawPrice': rawPrice,
+                      'roundedPrice': roundedPrice,
+                    });
+                    if (!_isShoppingMode) {
+                      _isShoppingMode = true;
+                    }
+                  });
+                  final total = _cartItems.fold<int>(0, (sum, i) => sum + (i['roundedPrice'] as int));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: const Color(0xFF16A34A),
+                      content: Text('$name sepete eklendi! Toplam Harcama: $total TL 🛒'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('İptal', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600, fontSize: 13.5)),
+              ),
+            ],
           ),
         ],
       ),
@@ -976,7 +1043,12 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   Future<void> _processReceiptFromImage(ImageSource source) async {
     try {
       final picker = ImagePicker();
-      final photo = await picker.pickImage(source: source);
+      final photo = await picker.pickImage(
+        source: source,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 85,
+      );
       if (photo == null) return;
 
       setState(() => _isScanningReceipt = true);
@@ -988,7 +1060,6 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
       setState(() {
         _isScanningReceipt = false;
         _scannedReceiptImage = photo.path;
-        _scannedReceiptRawText = rawText;
         _scannedReceiptTotal = detectedTotal;
       });
 
@@ -1002,7 +1073,6 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   void _simulateReceiptScan() {
     setState(() {
       _scannedReceiptImage = null;
-      _scannedReceiptRawText = 'MARKET KASA FİŞİ\n01.10.2026\nTOPKDV *46,60\nTOPLAM *$_totalRoundedBill,00\nKDV DAHİL';
       _scannedReceiptTotal = _totalRoundedBill.toDouble();
     });
     _speak('Fiş başarıyla okundu. Fiş tutarı: $_totalRoundedBill lira.');
@@ -1430,7 +1500,6 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
       _cartItems.clear();
       _scannedReceiptImage = null;
       _scannedReceiptTotal = null;
-      _scannedReceiptRawText = null;
       _isScanningReceipt = false;
     });
 

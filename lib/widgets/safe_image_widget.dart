@@ -31,7 +31,7 @@ Widget buildSafeImage(
           fit: fit,
           width: width,
           height: height,
-          errorBuilder: (_, __, ___) => _errorWidget(),
+          errorBuilder: (_, _, _) => _errorWidget(),
         );
       }
     } catch (_) {}
@@ -44,7 +44,7 @@ Widget buildSafeImage(
       fit: fit,
       width: width,
       height: height,
-      errorBuilder: (_, __, ___) => _errorWidget(),
+      errorBuilder: (_, _, _) => _errorWidget(),
     );
   }
 
@@ -55,7 +55,7 @@ Widget buildSafeImage(
       fit: fit,
       width: width,
       height: height,
-      errorBuilder: (_, __, ___) => _errorWidget(),
+      errorBuilder: (_, _, _) => _errorWidget(),
     );
   }
 
@@ -69,7 +69,7 @@ Widget buildSafeImage(
           fit: fit,
           width: width,
           height: height,
-          errorBuilder: (_, __, ___) => _errorWidget(),
+          errorBuilder: (_, _, _) => _errorWidget(),
         );
       }
     } catch (_) {}

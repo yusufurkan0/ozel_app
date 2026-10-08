@@ -57,12 +57,12 @@ class _KitchenRecipeDetailScreenState extends State<KitchenRecipeDetailScreen>
 
   void _speakList(bool isIngredients) {
     if (isIngredients) {
-      final text = 'Malzemeler kontrol listesi: ' +
-          widget.recipe.ingredients.map((i) => '${i.amount ?? ''} ${i.name}').join(', ');
+      final items = widget.recipe.ingredients.map((i) => '${i.amount ?? ''} ${i.name}').join(', ');
+      final text = 'Malzemeler kontrol listesi: $items';
       _speak(text);
     } else {
-      final text = 'Araç ve materyaller kontrol listesi: ' +
-          widget.recipe.tools.map((t) => '${t.amount ?? ''} ${t.name}').join(', ');
+      final items = widget.recipe.tools.map((t) => '${t.amount ?? ''} ${t.name}').join(', ');
+      final text = 'Araç ve materyaller kontrol listesi: $items';
       _speak(text);
     }
   }
@@ -76,6 +76,107 @@ class _KitchenRecipeDetailScreenState extends State<KitchenRecipeDetailScreen>
         item.isChecked = selectAll;
       }
     });
+  }
+
+  void _showItemPreviewDialog(BuildContext context, RecipeCheckItem item, Color themeColor) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            12,
+            20,
+            MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Aşağı / yukarı çekme çubuğu (Drag handle)
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 24),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              if (item.amount != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Gereken Miktar: ${item.amount}',
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Container(
+                height: 200,
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: item.imagePath != null
+                    ? Image.asset(
+                        item.imagePath!,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => Icon(item.icon, color: themeColor, size: 72),
+                      )
+                    : Icon(item.icon, color: themeColor, size: 72),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: item.isChecked ? Colors.green : themeColor,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                ),
+                icon: Icon(item.isChecked ? Icons.check_circle_rounded : Icons.check_rounded),
+                label: Text(item.isChecked ? 'Hazır Olarak İşaretlendi ✅' : 'Hazır Olarak İşaretle 👍'),
+                onPressed: () {
+                  setState(() {
+                    item.isChecked = !item.isChecked;
+                  });
+                  setModalState(() {});
+                  Navigator.pop(ctx);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -122,7 +223,7 @@ class _KitchenRecipeDetailScreenState extends State<KitchenRecipeDetailScreen>
                     Image.asset(
                       recipe.coverImagePath!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
                     ),
                   Container(
                     decoration: BoxDecoration(
@@ -392,27 +493,48 @@ class _KitchenRecipeDetailScreenState extends State<KitchenRecipeDetailScreen>
                                   const SizedBox(width: 14),
 
                                   // Öğe İkonu veya Fotoğrafı
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: BoxDecoration(
-                                      color: recipe.themeColor.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: recipe.themeColor.withValues(alpha: 0.2),
+                                  GestureDetector(
+                                    onTap: item.imagePath != null
+                                        ? () => _showItemPreviewDialog(context, item, recipe.themeColor)
+                                        : null,
+                                    child: Container(
+                                      width: 54,
+                                      height: 54,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: item.isChecked
+                                              ? recipe.themeColor.withValues(alpha: 0.5)
+                                              : Colors.grey.shade300,
+                                          width: 1.5,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.04),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: item.imagePath != null
+                                            ? Padding(
+                                                padding: const EdgeInsets.all(4.0),
+                                                child: Image.asset(
+                                                  item.imagePath!,
+                                                  fit: BoxFit.contain,
+                                                  errorBuilder: (_, _, _) =>
+                                                      Icon(item.icon, color: recipe.themeColor, size: 28),
+                                                ),
+                                              )
+                                            : Container(
+                                                color: recipe.themeColor.withValues(alpha: 0.1),
+                                                child: Icon(item.icon, color: recipe.themeColor, size: 28),
+                                              ),
                                       ),
                                     ),
-                                    child: item.imagePath != null
-                                        ? ClipRRect(
-                                            borderRadius: BorderRadius.circular(11),
-                                            child: Image.asset(
-                                              item.imagePath!,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) =>
-                                                  Icon(item.icon, color: recipe.themeColor, size: 24),
-                                            ),
-                                          )
-                                        : Icon(item.icon, color: recipe.themeColor, size: 24),
                                   ),
                                   const SizedBox(width: 14),
 
@@ -539,8 +661,15 @@ class _KitchenRecipeDetailScreenState extends State<KitchenRecipeDetailScreen>
                     _stopTts();
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => CookingStepByStepScreen(recipe: recipe),
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            CookingStepByStepScreen(recipe: recipe),
+                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          const begin = Offset(0.0, 1.0);
+                          const end = Offset.zero;
+                          final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeOutCubic));
+                          return SlideTransition(position: animation.drive(tween), child: child);
+                        },
                       ),
                     );
                   },
