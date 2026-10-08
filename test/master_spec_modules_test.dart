@@ -245,6 +245,56 @@ void main() {
       expect(find.text('Nakit Para Defterim'), findsOneWidget);
     });
 
+    testWidgets('Nakit Para Defterim: Cüzdandaki para fişe yetmiyorsa PARAMIZ YETMİYOR uyarısı ve engeli çalışmalı', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'cash_ledger_wallet_v2': '{"200":0,"100":0,"50":0,"20":0,"10":0,"5":0,"1":0}',
+      });
+
+      await tester.pumpWidget(const MaterialApp(home: CashLedgerScreen()));
+      await tester.pumpAndSettle();
+
+      if (find.text('Yeni Hafta Başladı! 📅').evaluate().isNotEmpty) {
+        await tester.tap(find.text('Paralarımı Say & Başla ✅'));
+        await tester.pumpAndSettle();
+      }
+
+      // Cüzdan toplamı 0 TL
+      expect(find.text('₺ 0'), findsOneWidget);
+
+      // Alışveriş modunu aç
+      await tester.tap(find.text('Alışverişi Başlat 🛒'));
+      await tester.pumpAndSettle();
+
+      // Ürün Ekle modalını aç
+      await tester.ensureVisible(find.text('İlk Ürünü Ekle'));
+      await tester.tap(find.text('İlk Ürünü Ekle'));
+      await tester.pumpAndSettle();
+
+      // Ürün bilgilerini gir (24 TL -> 25 TL yuvarlanmalı)
+      await tester.enterText(find.widgetWithText(TextField, 'Ürün Adı'), 'Süt ve Ekmek');
+      await tester.enterText(find.widgetWithText(TextField, 'Virgülün Solundaki Tutar (TL)'), '24');
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Sepete Ekle (+1 TL)'));
+      await tester.tap(find.text('Sepete Ekle (+1 TL)'));
+      await tester.pumpAndSettle();
+
+      // Alışverişi Bitir & Ödemeye Geç
+      await tester.tap(find.text('Alışverişi Bitir & Ödemeye Geç ➔'));
+      await tester.pumpAndSettle();
+
+      // Cüzdan 0 TL, hesaplanan 25 TL -> Paramız yetmiyor uyarısı çıkmalı!
+      expect(find.text('PARAMIZ YETMİYOR! ❌'), findsOneWidget);
+      expect(find.text('Paramız Yetmiyor (₺25 Eksik) ❌'), findsOneWidget);
+
+      // Butona basıldığında yetersiz bakiye dialogu açılmalı ve ödeme engellenmeli
+      await tester.tap(find.text('Paramız Yetmiyor (₺25 Eksik) ❌'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('₺25 Yok ❌'), findsOneWidget);
+      expect(find.text('Anladım, Paramız Yetmiyor'), findsOneWidget);
+    });
+
     test('Gerçek Market Fişi (ŞOK / BİM / A101) OCR Toplam Tutar Çıkarma Testi', () {
       const realSokReceiptText = '''
 ŞOK MARKETLER TİC.A.Ş

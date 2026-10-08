@@ -37,6 +37,26 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
     return sum;
   }
 
+  int get _effectiveBillAmount =>
+      (_scannedReceiptTotal != null ? _scannedReceiptTotal!.ceil() : _totalRoundedBill);
+
+  bool get _isMoneyInsufficient => _totalWalletBalance < _effectiveBillAmount;
+
+  int get _missingMoneyAmount =>
+      _isMoneyInsufficient ? (_effectiveBillAmount - _totalWalletBalance) : 0;
+
+  void _recalculatePaymentPlan(int targetAmount) {
+    final paymentPlan = _calculateOptimalPayment(targetAmount);
+    int totalPaid = 0;
+    paymentPlan.forEach((val, count) => totalPaid += val * count);
+    setState(() {
+      _totalRoundedBill = targetAmount;
+      _suggestedPaymentNotes = paymentPlan;
+      _totalGivenMoney = totalPaid;
+      _changeDue = totalPaid >= targetAmount ? (totalPaid - targetAmount) : 0;
+    });
+  }
+
   // Alışveriş Modu Durumları
   bool _isShoppingMode = false;
   final List<Map<String, dynamic>> _cartItems = [];
@@ -455,7 +475,15 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
     });
 
     _inactivityHelp.reset(context);
-    _speak('Alışveriş tamamlandı. Toplam harcamanız $totalRounded Türk Lirası. Cüzdanınızdan bu paraları vermelisiniz.');
+    if (_isMoneyInsufficient) {
+      _speak(
+        'Paramız yetmiyor! Cüzdanında $_totalWalletBalance Lira var, sepet tutarı $totalRounded Lira. $_missingMoneyAmount Lira eksik, paramız yetersiz!',
+      );
+    } else {
+      _speak(
+        'Alışveriş tamamlandı. Toplam harcamanız $totalRounded Türk Lirası. Cüzdanınızdan bu paraları vermelisiniz.',
+      );
+    }
   }
 
   /// Cüzdandaki paralarla toplam tutarı karşılayacak banknot kombinasyonu
@@ -1063,7 +1091,15 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
         _scannedReceiptTotal = detectedTotal;
       });
 
-      _speak('Fiş başarıyla okundu. Fiş tutarı: ${detectedTotal.toStringAsFixed(2)} lira.');
+      _recalculatePaymentPlan(detectedTotal.ceil());
+
+      if (_isMoneyInsufficient) {
+        _speak(
+          'Paramız yetmiyor! Fiş tutarı ${detectedTotal.ceil()} Lira, ancak cüzdanında $_totalWalletBalance Lira var. $_missingMoneyAmount Lira eksik, paramız yetersiz!',
+        );
+      } else {
+        _speak('Fiş başarıyla okundu. Fiş tutarı: ${detectedTotal.toStringAsFixed(2)} lira.');
+      }
     } catch (_) {
       setState(() => _isScanningReceipt = false);
       _simulateReceiptScan();
@@ -1075,7 +1111,14 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
       _scannedReceiptImage = null;
       _scannedReceiptTotal = _totalRoundedBill.toDouble();
     });
-    _speak('Fiş başarıyla okundu. Fiş tutarı: $_totalRoundedBill lira.');
+    _recalculatePaymentPlan(_totalRoundedBill);
+    if (_isMoneyInsufficient) {
+      _speak(
+        'Paramız yetmiyor! Fiş tutarı $_totalRoundedBill Lira, ancak cüzdanında $_totalWalletBalance Lira var. $_missingMoneyAmount Lira eksik, paramız yetersiz!',
+      );
+    } else {
+      _speak('Fiş başarıyla okundu. Fiş tutarı: $_totalRoundedBill lira.');
+    }
   }
 
   /// Türk market fişlerinden (ŞOK, BİM, A101, Migros vb.) genel toplam tutarını hassas biçimde çıkarır.
@@ -1277,8 +1320,15 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
               final parsed = double.tryParse(ctrl.text.replaceAll(',', '.').trim());
               if (parsed != null && parsed > 0) {
                 setState(() => _scannedReceiptTotal = parsed);
+                _recalculatePaymentPlan(parsed.ceil());
                 Navigator.pop(ctx);
-                _speak('Fiş tutarı ${parsed.toStringAsFixed(2)} lira olarak güncellendi.');
+                if (_isMoneyInsufficient) {
+                  _speak(
+                    'Fiş tutarı güncellendi ancak paramız yetmiyor! Fiş ${parsed.ceil()} Lira, cüzdanda $_totalWalletBalance Lira var. $_missingMoneyAmount Lira eksik!',
+                  );
+                } else {
+                  _speak('Fiş tutarı ${parsed.toStringAsFixed(2)} lira olarak güncellendi.');
+                }
               }
             },
             child: const Text('Kaydet & Onayla'),
@@ -1290,6 +1340,91 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
 
   // ─── ÖDEME VE PARA ÜSTÜ ALMA AKIŞI ───
   void _onProceedToPayment() {
+    if (_isMoneyInsufficient) {
+      _speak(
+        'Paramız yetmiyor! Fişi ödemek için $_missingMoneyAmount Lira daha gerekiyor. Cüzdanda yeterli para yok!',
+      );
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 30),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Paramız Yetmiyor! ❌',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFFDC2626)),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Bu fişi ödemek için cüzdanındaki para yeterli değil. Lütfen cüzdanına para ekle veya sepetini kontrol et.',
+                style: TextStyle(fontSize: 14, color: Color(0xFF334155)),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Cüzdandaki Para:', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                        Text('₺$_totalWalletBalance', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Ödenecek Tutar:', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                        Text('₺$_effectiveBillAmount', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFDC2626))),
+                      ],
+                    ),
+                    const Divider(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Eksik Tutar:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFDC2626))),
+                        Text(
+                          '₺$_missingMoneyAmount Yok ❌',
+                          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFFDC2626)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Anladım, Paramız Yetmiyor'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     if (_changeDue > 0) {
       _showChangeDueReceivedDialog();
     } else {
@@ -2101,28 +2236,112 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.4), width: 2),
+              border: Border.all(
+                color: _isMoneyInsufficient
+                    ? const Color(0xFFEF4444).withValues(alpha: 0.6)
+                    : const Color(0xFF16A34A).withValues(alpha: 0.4),
+                width: 2,
+              ),
             ),
             child: Column(
               children: [
-                const Text('HESAPLANAN TOPLAM TUTAR', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                if (_isMoneyInsufficient) ...[
+                  // 🛑 PARAMIZ YETMİYOR UYARI BANNERI
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFCA5A5), width: 1.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFDC2626),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.warning_rounded, color: Colors.white, size: 22),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'PARAMIZ YETMİYOR! ❌',
+                                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFFB91C1C)),
+                                  ),
+                                  Text(
+                                    'Cüzdandaki nakit para bu fişe yetmiyor!',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Cüzdanda: ₺$_totalWalletBalance', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                            Text('Fiş: ₺$_effectiveBillAmount', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFFB91C1C))),
+                            Text('Eksik: ₺$_missingMoneyAmount TL', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFFDC2626))),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                Text(
+                  _scannedReceiptTotal != null ? 'FİŞE GÖRE ÖDENECEK TUTAR' : 'HESAPLANAN TOPLAM TUTAR',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: _isMoneyInsufficient ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                  ),
+                ),
                 const SizedBox(height: 6),
-                Text('₺ $_totalRoundedBill', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Color(0xFF16A34A))),
+                Text(
+                  '₺ $_effectiveBillAmount',
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    color: _isMoneyInsufficient ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
+                    color: _isMoneyInsufficient ? const Color(0xFFFEF2F2) : const Color(0xFFF0FDF4),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 22),
-                      SizedBox(width: 8),
+                      Icon(
+                        _isMoneyInsufficient ? Icons.cancel_rounded : Icons.check_circle_rounded,
+                        color: _isMoneyInsufficient ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Cüzdanındaki bu paraları vermelisin:',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF166534)),
+                          _isMoneyInsufficient
+                              ? 'Paramız yetmiyor! Fişi ödemek için ₺$_missingMoneyAmount TL eksik.'
+                              : 'Cüzdanındaki bu paraları vermelisin:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: _isMoneyInsufficient ? const Color(0xFFB91C1C) : const Color(0xFF166534),
+                          ),
                         ),
                       ),
                     ],
@@ -2351,13 +2570,18 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF16A34A),
+                backgroundColor: _isMoneyInsufficient ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
-              icon: const Icon(Icons.check_circle_rounded, size: 24),
-              label: const Text('Ödemeyi Yaptım & Cüzdanı Güncelle ✅', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              icon: Icon(_isMoneyInsufficient ? Icons.warning_rounded : Icons.check_circle_rounded, size: 24),
+              label: Text(
+                _isMoneyInsufficient
+                    ? 'Paramız Yetmiyor (₺$_missingMoneyAmount Eksik) ❌'
+                    : 'Ödemeyi Yaptım & Cüzdanı Güncelle ✅',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
               onPressed: _onProceedToPayment,
             ),
           ),
