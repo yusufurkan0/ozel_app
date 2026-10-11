@@ -26,6 +26,19 @@ class OcrTranslationResult {
   });
 }
 
+/// Fiş Analiz ve Akıllı Tutar Çıkarma Modeli
+class ReceiptAnalysisResult {
+  final double? primaryTotal;
+  final List<double> candidates;
+  final String rawText;
+
+  const ReceiptAnalysisResult({
+    required this.primaryTotal,
+    required this.candidates,
+    required this.rawText,
+  });
+}
+
 /// Örnek Demo Senaryosu (Kamera olmadan test & pratik yapabilmek için).
 class OcrDemoScenario {
   final String title;
@@ -128,14 +141,18 @@ class OcrTranslationService {
 
         final currentY = current.boundingBox.center.dy;
         final currentH = current.boundingBox.height;
-        final yTolerance = (currentH * 0.75).clamp(8.0, 30.0);
+        final yTolerance = (currentH * 1.3).clamp(10.0, 50.0);
 
         for (int j = i + 1; j < allLines.length; j++) {
           final other = allLines[j];
           if (visited.contains(other)) continue;
 
           final otherY = other.boundingBox.center.dy;
-          if ((otherY - currentY).abs() <= yTolerance) {
+          final isVerticalOverlap = (other.boundingBox.bottom >= current.boundingBox.top &&
+                                     other.boundingBox.top <= current.boundingBox.bottom);
+          final isCenterClose = (otherY - currentY).abs() <= yTolerance;
+
+          if (isVerticalOverlap || isCenterClose) {
             rowGroup.add(other);
             visited.add(other);
           }
@@ -152,6 +169,162 @@ class OcrTranslationService {
       debugPrint('Receipt OCR hatası: $e');
       return await recognizeText(imagePath);
     }
+  }
+
+  /// Türk market fişlerinden genel toplamı ve alternatif fiyat adaylarını hassas biçimde çıkarır.
+  ReceiptAnalysisResult analyzeReceipt(String rawText) {
+    if (rawText.trim().isEmpty) {
+      return const ReceiptAnalysisResult(primaryTotal: null, candidates: [], rawText: '');
+    }
+
+    final cleanedLines = rawText
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty && l != '---')
+        .toList();
+
+    double? detectedTotal;
+    final allFoundPrices = <double>[];
+    final candidateScores = <double, int>{};
+
+    for (int i = cleanedLines.length - 1; i >= 0; i--) {
+      final line = cleanedLines[i];
+      final upper = _normalizeTurkishForReceiptOcr(line);
+
+      // KDV toplamı satırını atla
+      if (upper.contains('TOPKDV') || upper.contains('KDV TOPLAM') || upper.contains('TOP. KDV')) {
+        continue;
+      }
+
+      final isTotalKeyword = upper.contains('TOPLAM') ||
+          upper.contains('GENEL TOPLAM') ||
+          upper.contains('T O P L A M') ||
+          upper.contains('TOPL AM') ||
+          upper.contains('TOP.TUTAR') ||
+          upper.contains('TOPLAM TUTAR') ||
+          upper.contains('ODENECEK') ||
+          upper.contains('ÖDENECEK') ||
+          upper.contains('TUTAR') ||
+          upper.contains('TOTAL') ||
+          upper.contains('NAKIT') ||
+          upper.contains('NAKİT') ||
+          upper.contains('KREDI') ||
+          upper.contains('KREDİ');
+
+      final linePrices = extractPricesFromReceiptLine(line);
+      for (final p in linePrices) {
+        if (!allFoundPrices.contains(p)) {
+          allFoundPrices.add(p);
+        }
+      }
+
+      if (isTotalKeyword) {
+        if (linePrices.isNotEmpty) {
+          detectedTotal ??= linePrices.last;
+          for (final p in linePrices) {
+            candidateScores[p] = (candidateScores[p] ?? 0) + 100;
+          }
+        } else {
+          // Altındaki 1-4 satıra bak (sütun ayrımı durumu)
+          for (int j = i + 1; j <= i + 4 && j < cleanedLines.length; j++) {
+            final nextLine = cleanedLines[j];
+            final nextUpper = _normalizeTurkishForReceiptOcr(nextLine);
+            if (!nextUpper.contains('KDV') && !nextUpper.contains('TARİH') && !nextUpper.contains('SAAT') && !nextUpper.contains('FİŞ NO')) {
+              final nextPrices = extractPricesFromReceiptLine(nextLine);
+              if (nextPrices.isNotEmpty) {
+                detectedTotal ??= nextPrices.last;
+                for (final p in nextPrices) {
+                  candidateScores[p] = (candidateScores[p] ?? 0) + 80;
+                }
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Çok satırlı Regex ile "TOPLAM ... *427,42" kalıbı
+    if (detectedTotal == null) {
+      final multiLineRegex = RegExp(
+        r'(?:GENEL\s+TOPLAM|TOPLAM|T\s*O\s*P\s*L\s*A\s*M|ÖDENECEK|ODENECEK|TOTAL)[\s\S]{0,45}?[*xX+₺TLtl\s:]*(\d{1,6}(?:[\.,\s]\d{2})?)',
+        caseSensitive: false,
+      );
+      final multiMatch = multiLineRegex.firstMatch(rawText);
+      if (multiMatch != null) {
+        final parsed = parseReceiptPrice(multiMatch.group(1));
+        if (parsed != null && parsed > 0.5) {
+          detectedTotal = parsed;
+          candidateScores[parsed] = (candidateScores[parsed] ?? 0) + 90;
+        }
+      }
+    }
+
+    // Fişin en altındaki fiyat
+    if (detectedTotal == null && allFoundPrices.isNotEmpty) {
+      detectedTotal = allFoundPrices.first;
+    }
+
+    // Adayları öncelik skoruna ve değere göre sırala
+    final sortedCandidates = allFoundPrices.toList();
+    sortedCandidates.sort((a, b) {
+      final scoreA = candidateScores[a] ?? 0;
+      final scoreB = candidateScores[b] ?? 0;
+      if (scoreA != scoreB) return scoreB.compareTo(scoreA);
+      return b.compareTo(a);
+    });
+
+    return ReceiptAnalysisResult(
+      primaryTotal: detectedTotal,
+      candidates: sortedCandidates,
+      rawText: rawText,
+    );
+  }
+
+  List<double> extractPricesFromReceiptLine(String line) {
+    if (line.endsWith('-') || line.contains('-%') || line.contains('İNDİRİM') || line.contains('INDIRIM')) {
+      return [];
+    }
+    final regex = RegExp(
+      r'[*xX+₺TLtl\s:]*(\d{1,6}[\.,]\d{2})(?!\d)|(?:\*|TL|₺)\s*(\d{1,6})(?!\d)',
+      caseSensitive: false,
+    );
+    final results = <double>[];
+    for (final m in regex.allMatches(line)) {
+      final str = m.group(1) ?? m.group(2);
+      final p = parseReceiptPrice(str);
+      if (p != null && p > 0.5) {
+        results.add(p);
+      }
+    }
+    return results;
+  }
+
+  double? parseReceiptPrice(String? text) {
+    if (text == null) return null;
+    var clean = text
+        .replaceAll(' ', '')
+        .replaceAll('*', '')
+        .replaceAll('₺', '')
+        .replaceAll('TL', '')
+        .replaceAll('tl', '');
+    if (clean.contains(',') && clean.contains('.')) {
+      clean = clean.replaceAll('.', '').replaceAll(',', '.');
+    } else if (clean.contains(',')) {
+      clean = clean.replaceAll(',', '.');
+    }
+    return double.tryParse(clean);
+  }
+
+  String _normalizeTurkishForReceiptOcr(String text) {
+    return text
+        .toUpperCase()
+        .replaceAll('İ', 'I')
+        .replaceAll('Ş', 'S')
+        .replaceAll('Ğ', 'G')
+        .replaceAll('Ü', 'U')
+        .replaceAll('Ö', 'O')
+        .replaceAll('Ç', 'C');
   }
 
   /// Tanınan metni Makaton sembol kartlarına çevirir.

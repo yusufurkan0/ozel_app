@@ -78,6 +78,7 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   // Fiş Tarama & Görsel İşleme Durumları
   String? _scannedReceiptImage;
   double? _scannedReceiptTotal;
+  List<double> _receiptCandidates = [];
   bool _isScanningReceipt = false;
 
   // Fiyat Etiketi Tarama Durumları
@@ -1051,6 +1052,45 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                 'Kasiyerin verdiği alışveriş fişini okutarak harcama tutarını görsel işleme ile doğrulayabilirsiniz:',
                 style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
               ),
+              const SizedBox(height: 10),
+
+              // 💡 Net Okuma İpuçları Kutusu
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_rounded, color: Color(0xFF2563EB), size: 18),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Kamera İle Net Okuma İpuçları:',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Color(0xFF1D4ED8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      '• Fişi düz ve aydınlık bir zemine koyun.\n'
+                      '• Kamerayı fişe tam paralel tutun, parlama olmasın.\n'
+                      '• Özellikle en alttaki TOPLAM tutarını net kadraja alın.',
+                      style: TextStyle(fontSize: 11.5, color: Color(0xFF334155), height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 16),
               ListTile(
                 leading: Container(
@@ -1108,9 +1148,9 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
       final picker = ImagePicker();
       final photo = await picker.pickImage(
         source: source,
-        maxWidth: 1280,
-        maxHeight: 1280,
-        imageQuality: 85,
+        maxWidth: 2400,
+        maxHeight: 3600,
+        imageQuality: 95,
       );
       if (photo == null) return;
 
@@ -1118,12 +1158,14 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
 
       // Konumsal Bounding-Box hizalamalı fiş tanıma
       final rawText = await OcrTranslationService().recognizeReceiptText(photo.path);
-      final detectedTotal = _extractReceiptTotal(rawText) ?? _totalRoundedBill.toDouble();
+      final analysis = OcrTranslationService().analyzeReceipt(rawText);
+      final detectedTotal = analysis.primaryTotal ?? _extractReceiptTotal(rawText) ?? _totalRoundedBill.toDouble();
 
       setState(() {
         _isScanningReceipt = false;
         _scannedReceiptImage = photo.path;
         _scannedReceiptTotal = detectedTotal;
+        _receiptCandidates = analysis.candidates;
       });
 
       _recalculatePaymentPlan(detectedTotal.ceil());
@@ -1308,67 +1350,133 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
     final ctrl = TextEditingController(text: _scannedReceiptTotal?.toStringAsFixed(2) ?? _totalRoundedBill.toStringAsFixed(2));
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.edit_note_rounded, color: Color(0xFF2563EB)),
-            SizedBox(width: 8),
-            Text('Fiş Tutarını Düzenle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Fişteki Genel Toplam tutarını kontrol edin ve gerekirse düzeltin:',
-              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          final curVal = double.tryParse(ctrl.text.replaceAll(',', '.').trim()) ?? 0.0;
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.edit_note_rounded, color: Color(0xFF2563EB), size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Fiş Tutarını Düzenle',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: ctrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Fiş Toplamı (TL)',
-                prefixText: '₺ ',
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Fişteki Genel Toplam tutarını kontrol edin ve gerekirse düzeltin:',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Fişte Okunan Alternatif Tutarlar (Tek Dokunuşla Seçme)
+                  if (_receiptCandidates.isNotEmpty) ...[
+                    const Text(
+                      'Fişte Okunan Tutarlar (Tek Dokunuşla Seç):',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _receiptCandidates.take(6).map((cand) {
+                        final isSelected = (cand - curVal).abs() < 0.01;
+                        return InkWell(
+                          onTap: () {
+                            setModalState(() {
+                              ctrl.text = cand.toStringAsFixed(2);
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF1D4ED8) : const Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isSelected) ...[
+                                  const Icon(Icons.check, size: 13, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                ],
+                                Text(
+                                  '₺${cand.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isSelected ? Colors.white : const Color(0xFF1E293B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  TextField(
+                    controller: ctrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Fiş Toplamı (TL)',
+                      prefixText: '₺ ',
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onChanged: (_) => setModalState(() {}),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('İptal'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              final parsed = double.tryParse(ctrl.text.replaceAll(',', '.').trim());
-              if (parsed != null && parsed > 0) {
-                setState(() => _scannedReceiptTotal = parsed);
-                _recalculatePaymentPlan(parsed.ceil());
-                Navigator.pop(ctx);
-                if (_isMoneyInsufficient) {
-                  _speak(
-                    'Fiş tutarı güncellendi ancak paramız yetmiyor! Fiş ${parsed.ceil()} Lira, cüzdanda $_totalWalletBalance Lira var. $_missingMoneyAmount Lira eksik!',
-                  );
-                } else {
-                  _speak('Fiş tutarı ${parsed.toStringAsFixed(2)} lira olarak güncellendi.');
-                }
-              }
-            },
-            child: const Text('Kaydet & Onayla'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('İptal'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  final parsed = double.tryParse(ctrl.text.replaceAll(',', '.').trim());
+                  if (parsed != null && parsed > 0) {
+                    setState(() => _scannedReceiptTotal = parsed);
+                    _recalculatePaymentPlan(parsed.ceil());
+                    Navigator.pop(ctx);
+                    if (_isMoneyInsufficient) {
+                      _speak(
+                        'Fiş tutarı güncellendi ancak paramız yetmiyor! Fiş ${parsed.ceil()} Lira, cüzdanda $_totalWalletBalance Lira var. $_missingMoneyAmount Lira eksik!',
+                      );
+                    } else {
+                      _speak('Fiş tutarı ${parsed.toStringAsFixed(2)} lira olarak güncellendi.');
+                    }
+                  }
+                },
+                child: const Text('Kaydet & Onayla'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

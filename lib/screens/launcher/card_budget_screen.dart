@@ -47,6 +47,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
   bool _isScanningReceipt = false;
   String? _lastScannedReceiptImage;
   double? _lastScannedReceiptTotal;
+  List<double> _receiptCandidates = [];
 
   double get _currentMonthSpent {
     double sum = 0.0;
@@ -400,7 +401,42 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                 'Kart ile yaptığınız harcamanın fişini kameraya okutun. Fiş tutarı otomatik algılanıp kart limitinizden düşülecektir:',
                 style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
+
+              // 💡 Net Okuma İpuçları Kutusu
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFBFDBFE)),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_rounded, color: Color(0xFF2563EB), size: 18),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Kamerayla Net Okuma İpuçları:',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E40AF)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      '• Fişin özellikle "TOPLAM" ve fiyat yazan alt kısmına yakından odaklanın.\n'
+                      '• Parlama ve gölge olmamasına dikkat edin, fişi düz tutun.\n'
+                      '• Kamera tutarı okuyamazsa onay penceresinde elle düzeltebilirsiniz.',
+                      style: TextStyle(fontSize: 11.5, color: Color(0xFF1E3A8A), height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(10),
@@ -457,9 +493,9 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
       final picker = ImagePicker();
       final photo = await picker.pickImage(
         source: source,
-        maxWidth: 1280,
-        maxHeight: 1280,
-        imageQuality: 85,
+        maxWidth: 2400,
+        maxHeight: 3600,
+        imageQuality: 95,
       );
       if (photo == null) return;
 
@@ -467,12 +503,14 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
 
       // Konumsal Bounding-Box hizalamalı fiş tanıma
       final rawText = await OcrTranslationService().recognizeReceiptText(photo.path);
-      final detectedTotal = _extractReceiptTotal(rawText) ?? 150.0;
+      final analysis = OcrTranslationService().analyzeReceipt(rawText);
+      final detectedTotal = analysis.primaryTotal ?? _extractReceiptTotal(rawText) ?? 150.0;
 
       setState(() {
         _isScanningReceipt = false;
         _lastScannedReceiptImage = photo.path;
         _lastScannedReceiptTotal = detectedTotal;
+        _receiptCandidates = analysis.candidates;
       });
 
       _handleDetectedReceipt(photo.path, detectedTotal);
@@ -487,6 +525,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
     setState(() {
       _lastScannedReceiptImage = null;
       _lastScannedReceiptTotal = mockTotal;
+      _receiptCandidates = [175.50, 149.00, 26.50];
     });
     _handleDetectedReceipt(null, mockTotal);
   }
@@ -612,6 +651,81 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                               ),
                             ),
                           ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Fişte Okunan Alternatif Tutarlar (Tek Dokunuşla Seçme Çipleri)
+                  if (_receiptCandidates.isNotEmpty) ...[
+                    const Text(
+                      'Fişte Okunan Tutarlar (Tek Dokunuşla Seç):',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: _receiptCandidates.take(6).map((cand) {
+                        final isSelected = (cand - currentAmount).abs() < 0.01;
+                        return InkWell(
+                          onTap: () {
+                            setModalState(() {
+                              amountCtrl.text = cand.toStringAsFixed(2);
+                            });
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF2563EB) : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF1D4ED8) : const Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isSelected) ...[
+                                  const Icon(Icons.check, size: 13, color: Colors.white),
+                                  const SizedBox(width: 4),
+                                ],
+                                Text(
+                                  '₺${cand.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: isSelected ? Colors.white : const Color(0xFF1E293B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Kolay Düzeltme İpucu
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.edit_note_rounded, size: 18, color: Color(0xFF2563EB)),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Tutar eksik veya yanlışsa aşağıdaki kutuya dokunup düzeltebilirsiniz.',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF475569)),
+                          ),
                         ),
                       ],
                     ),
