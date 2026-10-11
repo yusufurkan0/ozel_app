@@ -279,6 +279,10 @@ void main() {
       await tester.tap(find.text('Sepete Ekle (+1 TL)'));
       await tester.pumpAndSettle();
 
+      // Alışveriş sırasında anlık olarak PARA YETMEDİ uyarısı yazmalı!
+      expect(find.text('PARA YETMEDİ! ❌'), findsOneWidget);
+      expect(find.textContaining('PARA YETMEDİ! ₺25 TL eksik'), findsOneWidget);
+
       // Alışverişi Bitir & Ödemeye Geç
       await tester.tap(find.text('Alışverişi Bitir & Ödemeye Geç ➔'));
       await tester.pumpAndSettle();

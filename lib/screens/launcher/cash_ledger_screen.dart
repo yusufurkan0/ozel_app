@@ -45,6 +45,15 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
   int get _missingMoneyAmount =>
       _isMoneyInsufficient ? (_effectiveBillAmount - _totalWalletBalance) : 0;
 
+  int get _currentCartTotal =>
+      _cartItems.fold<int>(0, (sum, item) => sum + (item['roundedPrice'] as int));
+
+  bool get _isCartMoneyInsufficient =>
+      _cartItems.isNotEmpty && (_currentCartTotal > _totalWalletBalance);
+
+  int get _cartMissingMoneyAmount =>
+      _isCartMoneyInsufficient ? (_currentCartTotal - _totalWalletBalance) : 0;
+
   void _recalculatePaymentPlan(int targetAmount) {
     final paymentPlan = _calculateOptimalPayment(targetAmount);
     int totalPaid = 0;
@@ -427,16 +436,30 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                     final rawPrice = int.tryParse(priceCtrl.text.trim()) ?? 0;
                     if (rawPrice > 0) {
                       final roundedPrice = rawPrice + 1; // 1 TL yuvarlama kuralı
+                      final itemName = nameCtrl.text.trim().isEmpty ? 'Ürün' : nameCtrl.text.trim();
                       setState(() {
                         _cartItems.add({
-                          'name': nameCtrl.text.trim().isEmpty ? 'Ürün' : nameCtrl.text.trim(),
+                          'name': itemName,
                           'rawPrice': rawPrice,
                           'roundedPrice': roundedPrice,
                         });
                       });
                       Navigator.pop(ctx);
                       _inactivityHelp.reset(context);
-                      _speak('${nameCtrl.text.trim()} eklendi. $rawPrice lira, 1 lira yuvarlanarak $roundedPrice lira hesaplandı.');
+                      final newTotal = _cartItems.fold<int>(0, (sum, i) => sum + (i['roundedPrice'] as int));
+                      if (newTotal > _totalWalletBalance) {
+                        final missing = newTotal - _totalWalletBalance;
+                        _speak('Para yetmedi! $itemName eklendi, sepet $newTotal lira oldu ancak cüzdanında $_totalWalletBalance lira var. $missing lira eksik!');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            backgroundColor: const Color(0xFFDC2626),
+                            content: Text('PARA YETMEDİ! ₺$missing Eksik (Sepet: ₺$newTotal / Cüzdan: ₺$_totalWalletBalance) ❌'),
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      } else {
+                        _speak('$itemName eklendi. $rawPrice lira, 1 lira yuvarlanarak $roundedPrice lira hesaplandı.');
+                      }
                     }
                   },
                 ),
@@ -951,13 +974,25 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                     }
                   });
                   final total = _cartItems.fold<int>(0, (sum, i) => sum + (i['roundedPrice'] as int));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      backgroundColor: const Color(0xFF16A34A),
-                      content: Text('$name sepete eklendi! Toplam Harcama: $total TL 🛒'),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
+                  if (total > _totalWalletBalance) {
+                    final missing = total - _totalWalletBalance;
+                    _speak('Para yetmedi! $name eklendi, sepet $total lira oldu ancak cüzdanında $_totalWalletBalance lira var. $missing lira eksik!');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: const Color(0xFFDC2626),
+                        content: Text('PARA YETMEDİ! ₺$missing Eksik (Sepet: ₺$total / Cüzdan: ₺$_totalWalletBalance) ❌'),
+                        duration: const Duration(seconds: 4),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: const Color(0xFF16A34A),
+                        content: Text('$name sepete eklendi! Toplam Harcama: $total TL 🛒'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
                 },
               ),
               const SizedBox(height: 4),
@@ -2042,7 +2077,142 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
           // Sepetteki Ürünler Listesi veya Ödeme Rehberi
           if (_showPaymentGuidance)
             _buildPaymentResultCard()
-          else if (_cartItems.isEmpty)
+          else if (_cartItems.isNotEmpty) ...[
+            // 🛑 ALIŞVERİŞ YAPARKEN PARA YETMİYORSA / YETİYORSA BİLGİ KARTI
+            if (_isCartMoneyInsufficient)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFEF4444), width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFDC2626),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 24),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'PARA YETMEDİ! ❌',
+                                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFFB91C1C)),
+                              ),
+                              Text(
+                                'Sepetteki tutar cüzdandaki nakit paradan fazla!',
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Cüzdan: ₺$_totalWalletBalance',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF475569), fontSize: 11.5),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              'Sepet: ₺$_currentCartTotal',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFB91C1C), fontSize: 11.5),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              '₺$_cartMissingMoneyAmount Eksik (YOK)',
+                              style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFDC2626), fontSize: 11.5),
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF86EFAC)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 18),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Cüzdan: ₺$_totalWalletBalance  |  Sepet: ₺$_currentCartTotal  |  Kalan: ₺${_totalWalletBalance - _currentCartTotal}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF166534)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              itemCount: _cartItems.length,
+              itemBuilder: (context, idx) {
+                final item = _cartItems[idx];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: const Color(0xFFEFF6FF),
+                      child: Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
+                    ),
+                    title: Text(item['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Girilen: ${item['rawPrice']} TL ➔ 1 TL Yuvarlama: ${item['roundedPrice']} TL'),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444)),
+                      onPressed: () {
+                        setState(() => _cartItems.removeAt(idx));
+                      },
+                    ),
+                  ),
+                );
+              },
+            ),
+          ] else if (_cartItems.isEmpty)
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -2137,34 +2307,7 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                 ],
               ),
             )
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              itemCount: _cartItems.length,
-              itemBuilder: (context, idx) {
-                final item = _cartItems[idx];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: const Color(0xFFEFF6FF),
-                      child: Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2563EB))),
-                    ),
-                    title: Text(item['name'] as String, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text('Girilen: ${item['rawPrice']} TL ➔ 1 TL Yuvarlama: ${item['roundedPrice']} TL'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: Color(0xFFEF4444)),
-                      onPressed: () {
-                        setState(() => _cartItems.removeAt(idx));
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
+
         ],
       ),
     );
@@ -2188,6 +2331,29 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (_isCartMoneyInsufficient) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cancel_rounded, color: Color(0xFFDC2626), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'PARA YETMEDİ! ₺$_cartMissingMoneyAmount TL eksik.',
+                        style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFFB91C1C), fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -2207,12 +2373,12 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF16A34A),
+                  backgroundColor: _isCartMoneyInsufficient ? const Color(0xFFDC2626) : const Color(0xFF16A34A),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                icon: const Icon(Icons.point_of_sale_rounded, size: 24),
+                icon: Icon(_isCartMoneyInsufficient ? Icons.warning_amber_rounded : Icons.point_of_sale_rounded, size: 24),
                 label: const Text('Alışverişi Bitir & Ödemeye Geç ➔', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 onPressed: _finishShopping,
               ),
