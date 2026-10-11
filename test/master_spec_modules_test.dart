@@ -461,6 +461,49 @@ TOPLAM *427,42
       expect(find.text('-₺250'), findsOneWidget);
     });
 
+    testWidgets('Kredi Kartı Takibi: Fişi Tara (Görsel İşleme) ile fiş tutarı okunup limitden otomatik düşmeli', (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'card_monthly_limit': 2000.0,
+      });
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      await tester.pumpWidget(const MaterialApp(home: CardBudgetScreen()));
+      await tester.pumpAndSettle();
+
+      // Kart Fişini Tara butonunu bul ve tıkla
+      expect(find.text('Kart Fişini Tara / Fotoğraf Çek 📸'), findsOneWidget);
+      await tester.tap(find.text('Kart Fişini Tara / Fotoğraf Çek 📸'));
+      await tester.pumpAndSettle();
+
+      // Fiş tarama bottom sheet açılmalı
+      expect(find.text('Kart Fişini Tara 🧾'), findsOneWidget);
+      expect(find.text('Örnek Fiş ile Test Et 🧾'), findsOneWidget);
+
+      // Örnek fiş ile test et
+      await tester.tap(find.text('Örnek Fiş ile Test Et 🧾'));
+      await tester.pumpAndSettle();
+
+      // Fişten Limit Düş diyalogu açılmalı
+      expect(find.text('Fişten Limit Düş 🧾'), findsOneWidget);
+      expect(find.text('LİMİT YETERLİ ✅'), findsOneWidget);
+      expect(find.text('Limitden Düş & Onayla ✅'), findsOneWidget);
+
+      // Onayla ve limitden düş
+      await tester.tap(find.text('Limitden Düş & Onayla ✅'));
+      await tester.pumpAndSettle();
+
+      // Harcama Kaydedildi özeti açılmalı
+      expect(find.text('Harcama Kaydedildi'), findsOneWidget);
+      await tester.tap(find.text('Tamam'));
+      await tester.pumpAndSettle();
+
+      // Ana ekranda limitden düşülmüş olmalı (-₺175)
+      expect(find.text('-₺175'), findsOneWidget);
+      expect(find.text('Market / Kart Fişi 🧾'), findsOneWidget);
+    });
+
     testWidgets('Destek Kişilerim ekranı Aile ve İş Koçu rollerini desteklemeli', (tester) async {
       tester.view.physicalSize = const Size(400, 900);
       tester.view.devicePixelRatio = 1.0;
