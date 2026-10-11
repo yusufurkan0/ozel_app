@@ -305,16 +305,34 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
               ),
             ),
             const Divider(color: Colors.white12, height: 1),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.white.withValues(alpha: 0.05),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.pinch_rounded, color: Colors.amberAccent, size: 16),
+                  SizedBox(width: 6),
+                  Text(
+                    'İki parmağınızla yakınlaştırıp serbestçe kaydırabilirsiniz 🔍',
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(12.0),
                 child: InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 4.0,
+                  minScale: 1.0,
+                  maxScale: 5.0,
                   child: Center(
-                    child: Image.asset(
-                      imagePath,
-                      fit: BoxFit.contain,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        imagePath,
+                        fit: BoxFit.contain,
+                      ),
                     ),
                   ),
                 ),
@@ -631,7 +649,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          // Adım Görseli / Fotoğrafı (Görsel Anlatım)
+                          // Adım Görseli / Fotoğrafı (Görsel Anlatım - Büyütülmüş & Net)
                           if (currentStep.imagePath != null) ...[
                             GestureDetector(
                               onTap: () => _showStepImagePreviewDialog(
@@ -644,35 +662,41 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                                 children: [
                                   Container(
                                     width: double.infinity,
-                                    constraints: const BoxConstraints(maxHeight: 260),
+                                    constraints: BoxConstraints(
+                                      minHeight: 280,
+                                      maxHeight: MediaQuery.of(context).size.height * 0.44,
+                                    ),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
-                                      borderRadius: BorderRadius.circular(20),
+                                      borderRadius: BorderRadius.circular(22),
                                       border: Border.all(
-                                        color: widget.recipe.themeColor.withValues(alpha: 0.3),
-                                        width: 2,
+                                        color: widget.recipe.themeColor.withValues(alpha: 0.35),
+                                        width: 2.5,
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.06),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
+                                          color: Colors.black.withValues(alpha: 0.08),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 5),
                                         ),
                                       ],
                                     ),
                                     child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(18),
-                                      child: Image.asset(
-                                        currentStep.imagePath!,
-                                        fit: BoxFit.contain,
-                                        errorBuilder: (_, _, _) => Container(
-                                          height: 120,
-                                          alignment: Alignment.center,
-                                          color: widget.recipe.themeColor.withValues(alpha: 0.1),
-                                          child: Icon(
-                                            currentStep.icon,
-                                            color: widget.recipe.themeColor,
-                                            size: 56,
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: AspectRatio(
+                                        aspectRatio: 1.25,
+                                        child: Image.asset(
+                                          currentStep.imagePath!,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Container(
+                                            height: 180,
+                                            alignment: Alignment.center,
+                                            color: widget.recipe.themeColor.withValues(alpha: 0.1),
+                                            child: Icon(
+                                              currentStep.icon,
+                                              color: widget.recipe.themeColor,
+                                              size: 64,
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -682,21 +706,28 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                                     right: 12,
                                     bottom: 12,
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.65),
+                                        color: Colors.black.withValues(alpha: 0.75),
                                         borderRadius: BorderRadius.circular(20),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: 0.3),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
                                       ),
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
-                                          SizedBox(width: 4),
+                                          Icon(Icons.zoom_in_rounded, color: Colors.white, size: 18),
+                                          SizedBox(width: 5),
                                           Text(
-                                            'Büyüt',
+                                            'Tam Ekran Büyüt 🔍',
                                             style: TextStyle(
                                               color: Colors.white,
-                                              fontSize: 11,
+                                              fontSize: 12,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
