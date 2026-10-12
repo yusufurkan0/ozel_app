@@ -1,3 +1,4 @@
+import '../../services/device_contacts_service.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -123,6 +124,7 @@ class _SupportContactsScreenState extends State<SupportContactsScreen> {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     String selectedRole = 'Aile'; // 'Aile', 'İş Koçu', 'Öğretmen', 'Diğer'
+    bool saveToDeviceContacts = false;
 
     showDialog(
       context: context,
@@ -141,6 +143,37 @@ class _SupportContactsScreenState extends State<SupportContactsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.buttonIndigo,
+                      side: const BorderSide(color: AppColors.buttonIndigo, width: 1.5),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    icon: const Icon(Icons.contacts_rounded, size: 20),
+                    label: const Text(
+                      '📱 Telefon Rehberinden Seç',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    ),
+                    onPressed: () async {
+                      final picked = await DeviceContactsService.pickContact();
+                      if (picked != null) {
+                        setModalState(() {
+                          if ((picked['name'] ?? '').isNotEmpty) {
+                            nameCtrl.text = picked['name']!;
+                          }
+                          if ((picked['phone'] ?? '').isNotEmpty) {
+                            phoneCtrl.text = picked['phone']!;
+                          }
+                        });
+                        _speak('${picked['name']} rehberden seçildi.');
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
                 const Text('Kişinin Rolü / Görevi:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF475569))),
                 const SizedBox(height: 8),
                 Wrap(
@@ -227,6 +260,26 @@ class _SupportContactsScreenState extends State<SupportContactsScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () => setModalState(() => saveToDeviceContacts = !saveToDeviceContacts),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: saveToDeviceContacts,
+                        activeColor: AppColors.buttonIndigo,
+                        onChanged: (val) => setModalState(() => saveToDeviceContacts = val ?? false),
+                      ),
+                      const Expanded(
+                        child: Text(
+                          'Telefon rehberine de kaydet (Rehbere At)',
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF334155)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -255,6 +308,13 @@ class _SupportContactsScreenState extends State<SupportContactsScreen> {
                     });
                   });
                   await _saveContacts();
+                  if (saveToDeviceContacts) {
+                    await DeviceContactsService.saveContactToDevice(
+                      name: name,
+                      phone: phone,
+                      role: selectedRole,
+                    );
+                  }
                   _speak('$name rehbere eklendi.');
                   if (ctx.mounted) Navigator.pop(ctx);
                 }
@@ -414,6 +474,26 @@ class _SupportContactsScreenState extends State<SupportContactsScreen> {
                                   ),
                                 ],
                               ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.contact_phone_outlined, color: AppColors.buttonIndigo, size: 25),
+                              tooltip: 'Telefon Rehberine Aktar',
+                              onPressed: () async {
+                                final cName = c['name'] ?? 'Destek Kişisi';
+                                final cPhone = c['phone'] ?? '';
+                                final cRole = c['role'] ?? 'Aile';
+                                final ok = await DeviceContactsService.saveContactToDevice(
+                                  name: cName,
+                                  phone: cPhone,
+                                  role: cRole,
+                                );
+                                if (ok) {
+                                  _showSnack('$cName telefon rehberine aktarılıyor...');
+                                  _speak('$cName telefon rehberinize aktarılıyor.');
+                                } else {
+                                  _showSnack('Rehbere aktarılamadı veya vazgeçildi.');
+                                }
+                              },
                             ),
                             IconButton(
                               icon: Icon(

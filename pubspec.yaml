@@ -52,6 +52,7 @@ dependencies:
   sqflite_common_ffi: ^2.4.0+3
   path: ^1.9.1
   url_launcher: ^6.3.2
+  flutter_contacts: ^2.1.0
 
 dev_dependencies:
   flutter_test:

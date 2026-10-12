@@ -588,7 +588,36 @@ class _LostSosScreenState extends State<LostSosScreen> {
 
             Expanded(
               child: ListView(
+                cacheExtent: 1500,
                 children: [
+                  // 🟢 AİLE KISMI: WHATSAPP CANLI KONUM GÖNDERME
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF16A34A),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 1,
+                      ),
+                      icon: const Icon(Icons.share_location_rounded, size: 20),
+                      label: const Text(
+                        "Aileye WhatsApp'tan Canlı Konum Gönder 🟢📍",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _sendLocationViaWhatsApp(
+                          targetPhone: _emergencyPhone.isNotEmpty
+                              ? _emergencyPhone
+                              : (_supportContacts.isNotEmpty ? (_supportContacts.first['phone'] as String? ?? '') : ''),
+                          targetName: _childName.isNotEmpty ? 'Ailem ($_childName)' : 'Ailem',
+                        );
+                      },
+                    ),
+                  ),
                   // Birincil Acil Durum Numarası
                   if (_emergencyPhone.isNotEmpty)
                     _buildContactCallCard(
@@ -711,21 +740,85 @@ class _LostSosScreenState extends State<LostSosScreen> {
               ],
             ),
           ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green.shade600,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              elevation: 2,
-            ),
-            icon: const Icon(Icons.phone_rounded, size: 18),
-            label: const Text('Ara', style: TextStyle(fontWeight: FontWeight.bold)),
-            onPressed: () => _callAndSendLocation(name, phone),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFFDCFCE7),
+                  foregroundColor: const Color(0xFF16A34A),
+                  padding: const EdgeInsets.all(8),
+                ),
+                icon: const Icon(Icons.share_location_rounded, size: 20),
+                tooltip: 'WhatsApp Konum Gönder',
+                onPressed: () => _sendLocationViaWhatsApp(targetPhone: phone, targetName: name),
+              ),
+              const SizedBox(width: 6),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 2,
+                ),
+                icon: const Icon(Icons.phone_rounded, size: 18),
+                label: const Text('Ara', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () => _callAndSendLocation(name, phone),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _sendLocationViaWhatsApp({String? targetPhone, String? targetName}) async {
+    final name = targetName ?? (_childName.isNotEmpty ? _childName : 'Ailem');
+    final phone = (targetPhone ?? _emergencyPhone).trim();
+
+    const mockLat = '41.0082';
+    const mockLng = '28.9784';
+    final locationUrl = 'https://maps.google.com/?q=$mockLat,$mockLng';
+    final child = _childName.isNotEmpty ? _childName : 'Yakınınız';
+    final message = '🆘 ACİL DURUM: Ben $child. Şu an kayboldum!\n\n📍 Canlı Harita Konumum:\n$locationUrl\n\nOlduğum yerde bekliyorum, lütfen beni buradan alın!';
+
+    _speak('$name kişisine WhatsApp üzerinden canlı konum gönderiliyor. Bulunduğunuz yerden kesinlikle ayrılmayın!');
+
+    if (phone.isNotEmpty) {
+      final cleanPhone = phone.replaceAll(RegExp(r'[^\d]'), '');
+      final formattedPhone = cleanPhone.startsWith('0')
+          ? '9$cleanPhone'
+          : (cleanPhone.startsWith('90') ? cleanPhone : '90$cleanPhone');
+      final uri = Uri.parse('https://wa.me/$formattedPhone?text=${Uri.encodeComponent(message)}');
+      try {
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          final genericWa = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
+          if (await canLaunchUrl(genericWa)) {
+            await launchUrl(genericWa, mode: LaunchMode.externalApplication);
+          }
+        }
+      } catch (_) {}
+    } else {
+      final genericWa = Uri.parse('https://wa.me/?text=${Uri.encodeComponent(message)}');
+      try {
+        if (await canLaunchUrl(genericWa)) {
+          await launchUrl(genericWa, mode: LaunchMode.externalApplication);
+        }
+      } catch (_) {}
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🟢 WhatsApp ile konum iletildi: $name'),
+          backgroundColor: const Color(0xFF16A34A),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _callAndSendLocation(String name, String phone) async {
