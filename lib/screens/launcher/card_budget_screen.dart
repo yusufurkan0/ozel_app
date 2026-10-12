@@ -44,9 +44,6 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
   bool _isLoading = true;
 
   // Fiş Tarama & Görsel İşleme (OCR) Durumları
-  bool _isScanningReceipt = false;
-  String? _lastScannedReceiptImage;
-  double? _lastScannedReceiptTotal;
   List<double> _receiptCandidates = [];
 
   double get _currentMonthSpent {
@@ -499,23 +496,17 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
       );
       if (photo == null) return;
 
-      setState(() => _isScanningReceipt = true);
-
       // Konumsal Bounding-Box hizalamalı fiş tanıma
       final rawText = await OcrTranslationService().recognizeReceiptText(photo.path);
       final analysis = OcrTranslationService().analyzeReceipt(rawText);
       final detectedTotal = analysis.primaryTotal ?? _extractReceiptTotal(rawText) ?? 150.0;
 
       setState(() {
-        _isScanningReceipt = false;
-        _lastScannedReceiptImage = photo.path;
-        _lastScannedReceiptTotal = detectedTotal;
         _receiptCandidates = analysis.candidates;
       });
 
       _handleDetectedReceipt(photo.path, detectedTotal);
     } catch (_) {
-      setState(() => _isScanningReceipt = false);
       _simulateReceiptScan();
     }
   }
@@ -523,8 +514,6 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
   void _simulateReceiptScan() {
     const mockTotal = 175.50;
     setState(() {
-      _lastScannedReceiptImage = null;
-      _lastScannedReceiptTotal = mockTotal;
       _receiptCandidates = [175.50, 149.00, 26.50];
     });
     _handleDetectedReceipt(null, mockTotal);
