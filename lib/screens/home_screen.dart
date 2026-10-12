@@ -286,7 +286,7 @@ class HomeScreen extends StatelessWidget {
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontWeight: FontWeight.w800,
-                                            fontSize: 16.5,
+                                            fontSize: 18,
                                             color: Color(0xFF0F172A),
                                             letterSpacing: -0.3,
                                           ),
@@ -297,8 +297,8 @@ class HomeScreen extends StatelessWidget {
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w500,
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600,
                                             color: Color(0xFF64748B),
                                           ),
                                         ),
@@ -332,13 +332,13 @@ class HomeScreen extends StatelessWidget {
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.info_rounded, size: 16, color: Color(0xFF1D4ED8)),
+                                Icon(Icons.info_rounded, size: 17, color: Color(0xFF1D4ED8)),
                                 SizedBox(width: 5),
                                 Text(
                                   'Genel Bilgiler',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     color: Color(0xFF1D4ED8),
                                   ),
                                 ),
@@ -518,18 +518,21 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 4),
 
-            // Kart Başlığı
-            Text(
-              app.title,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-                color: app.textColor,
-                height: 1.15,
-                letterSpacing: -0.2,
+            // Kart Başlığı (Özel eğitim için daha büyük ve okunaklı punto)
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                app.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w900,
+                  color: app.textColor,
+                  height: 1.15,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
             const SizedBox(height: 2),
