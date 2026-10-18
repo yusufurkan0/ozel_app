@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/teacher_sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../theme/app_theme.dart';
@@ -14,6 +16,8 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
     with SingleTickerProviderStateMixin {
   final FlutterTts _tts = FlutterTts();
   late TabController _tabCtrl;
+  List<Map<String, dynamic>> _teacherTasks = [];
+  bool _isLoadingTeacherTasks = false;
 
   final List<Map<String, dynamic>> _tasks = [
     {
@@ -72,6 +76,58 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
     super.initState();
     _tabCtrl = TabController(length: 2, vsync: this);
     _initTts();
+    _loadTeacherTasks();
+  }
+
+  Future<void> _loadTeacherTasks() async {
+    setState(() => _isLoadingTeacherTasks = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final childName = prefs.getString('child_name') ??
+          prefs.getString('sos_child_name') ??
+          prefs.getString('user_emergency_name') ??
+          '';
+
+      final tasks = await TeacherSyncService.instance.fetchTasksForStudent(studentName: childName);
+
+      if (mounted) {
+        setState(() {
+          _teacherTasks = tasks.map((t) {
+            return {
+              'id': t['id'] ?? 'tsk_${DateTime.now().millisecondsSinceEpoch}',
+              'title': t['title'] ?? 'Öğretmen Görevi',
+              'icon': _parseTaskIcon(t['icon']),
+              'color': _parseTaskColor(t['priority']),
+              'completed': t['isCompleted'] == true,
+              'points': (t['points'] is int) ? t['points'] : int.tryParse(t['points']?.toString() ?? '15') ?? 15,
+              'isTeacherTask': true,
+              'dueDate': t['dueDate'] ?? 'Bugün',
+              'category': t['category'] ?? 'Genel',
+            };
+          }).toList();
+          _isLoadingTeacherTasks = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingTeacherTasks = false);
+    }
+  }
+
+  IconData _parseTaskIcon(dynamic iconStr) {
+    final s = (iconStr ?? '').toString().toLowerCase();
+    if (s.contains('kitap') || s.contains('book')) return Icons.menu_book_rounded;
+    if (s.contains('spor') || s.contains('sport')) return Icons.fitness_center_rounded;
+    if (s.contains('yemek') || s.contains('food')) return Icons.restaurant_rounded;
+    if (s.contains('temiz') || s.contains('clean')) return Icons.cleaning_services_rounded;
+    if (s.contains('yatak') || s.contains('bed')) return Icons.bed_rounded;
+    return Icons.assignment_rounded;
+  }
+
+  Color _parseTaskColor(dynamic priority) {
+    final p = (priority ?? '').toString().toLowerCase();
+    if (p.contains('yüksek') || p.contains('high')) return Colors.orange;
+    if (p.contains('acil') || p.contains('urgent')) return Colors.red;
+    return Colors.indigo;
   }
 
   void _initTts() async {
@@ -87,13 +143,27 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
     } catch (_) {}
   }
 
-  void _toggleTask(int index) {
+  void _toggleTask(int index, List<Map<String, dynamic>> allTasks) {
+    final task = allTasks[index];
+    final newCompleted = !(task['completed'] == true);
+
     setState(() {
-      _tasks[index]['completed'] = !_tasks[index]['completed'];
+      task['completed'] = newCompleted;
     });
-    final task = _tasks[index];
-    if (task['completed'] == true) {
-      _speak('Tebrikler! ${task['title']} görevini başardın!');
+
+    if (task['isTeacherTask'] == true && task['id'] != null) {
+      TeacherSyncService.instance.toggleTaskCompletion(
+        taskId: task['id'],
+        isCompleted: newCompleted,
+      );
+    }
+
+    if (newCompleted) {
+      if (task['isTeacherTask'] == true) {
+        _speak('Harika! Öğretmeninin verdiği ${task['title']} görevini başardın!');
+      } else {
+        _speak('Tebrikler! ${task['title']} görevini başardın!');
+      }
     }
   }
 
@@ -173,6 +243,15 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
             Text('Görev Listesi', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: _isLoadingTeacherTasks
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
+                : const Icon(Icons.refresh_rounded, color: Colors.green),
+            tooltip: 'Görevleri Yenile',
+            onPressed: _loadTeacherTasks,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabCtrl,
           labelColor: Colors.green.shade800,
@@ -200,10 +279,11 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
   }
 
   Widget _buildQuickChecklist() {
-    final completedCount = _tasks.where((t) => t['completed'] == true).length;
-    final totalCount = _tasks.length;
+    final allTasks = [..._teacherTasks, ..._tasks];
+    final completedCount = allTasks.where((t) => t['completed'] == true).length;
+    final totalCount = allTasks.length;
     final progress = totalCount > 0 ? (completedCount / totalCount) : 0.0;
-    final totalScore = _tasks.where((t) => t['completed'] == true).fold<int>(0, (sum, t) => sum + (t['points'] as int));
+    final totalScore = allTasks.where((t) => t['completed'] == true).fold<int>(0, (sum, t) => sum + ((t['points'] as int?) ?? 10));
 
     return Column(
       children: [
@@ -313,11 +393,12 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            itemCount: _tasks.length,
+            itemCount: allTasks.length,
             itemBuilder: (context, index) {
-              final task = _tasks[index];
-              final completed = task['completed'] as bool;
-              final color = task['color'] as Color;
+              final task = allTasks[index];
+              final completed = task['completed'] == true;
+              final color = (task['color'] as Color?) ?? Colors.green;
+              final isTeacherTask = task['isTeacherTask'] == true;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -325,8 +406,10 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
-                    color: completed ? Colors.green.shade300 : Colors.grey.shade200,
-                    width: completed ? 2 : 1,
+                    color: completed
+                        ? Colors.green.shade300
+                        : (isTeacherTask ? Colors.indigo.shade300 : Colors.grey.shade200),
+                    width: (completed || isTeacherTask) ? 2 : 1,
                   ),
                   boxShadow: const [
                     BoxShadow(
@@ -339,7 +422,7 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   leading: GestureDetector(
-                    onTap: () => _toggleTask(index),
+                    onTap: () => _toggleTask(index, allTasks),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       width: 44,
@@ -349,34 +432,59 @@ class _TaskChecklistScreenState extends State<TaskChecklistScreen>
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
-                        completed ? Icons.check_rounded : (task['icon'] as IconData),
+                        completed ? Icons.check_rounded : (task['icon'] as IconData? ?? Icons.assignment_rounded),
                         color: completed ? Colors.white : color,
                         size: 24,
                       ),
                     ),
                   ),
-                  title: Text(
-                    task['title'] as String,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      decoration: completed ? TextDecoration.lineThrough : null,
-                      color: completed ? Colors.grey : AppColors.textPrimary,
-                    ),
+                  title: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isTeacherTask) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.indigo.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: Colors.indigo.shade200),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text('🧑‍🏫 Öğretmenden Görev', style: TextStyle(fontSize: 10.5, color: Colors.indigo, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                      Text(
+                        task['title'] as String? ?? '',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          decoration: completed ? TextDecoration.lineThrough : null,
+                          color: completed ? Colors.grey : AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
                   ),
+                  subtitle: isTeacherTask && task['dueDate'] != null
+                      ? Text('⏰ Bitiş: ${task['dueDate']}', style: const TextStyle(fontSize: 12, color: Colors.grey))
+                      : null,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         icon: const Icon(Icons.volume_up_rounded, color: AppColors.buttonIndigo),
                         tooltip: 'Sesli Dinle',
-                        onPressed: () => _speak(task['title'] as String),
+                        onPressed: () => _speak(task['title'] as String? ?? ''),
                       ),
                       Checkbox(
                         value: completed,
                         activeColor: Colors.green,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        onChanged: (_) => _toggleTask(index),
+                        onChanged: (_) => _toggleTask(index, allTasks),
                       ),
                     ],
                   ),

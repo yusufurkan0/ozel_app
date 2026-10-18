@@ -1685,8 +1685,13 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                     children: [
                       const Icon(Icons.history_rounded, size: 18, color: Color(0xFF64748B)),
                       const SizedBox(width: 6),
-                      const Text('Kayıtlı Harcamalar:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF475569))),
-                      const Spacer(),
+                      const Expanded(
+                        child: Text(
+                          'Kayıtlı Harcamalar:',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF475569)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                       if (_nextMonthSpent > 0)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/tts_service.dart';
 import '../../services/voice_dictation_service.dart';
 import '../../theme/app_theme.dart';
+import '../../services/teacher_sync_service.dart';
 
 /// Form Seçenekleri (Word Belgeleri)
 enum EvaluationFormType {
@@ -742,6 +743,13 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
     }
 
     await _saveToHistory();
+
+    // Canlı Öğretmen Paneline Gönder (Hatasız & Güvenli)
+    TeacherSyncService.instance.sendEvaluationForm(
+      formType: _activeFormType?.name ?? 'genel',
+      formTitle: formName,
+      answers: _answers,
+    );
   }
 
   Future<void> _saveToHistory() async {

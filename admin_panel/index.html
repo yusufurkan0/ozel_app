@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Özel Adımlar Akademi - Yönetim & Öğretmen Portalı</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22><text y=%2226%22 font-size=%2224%22>🌟</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-icon">🌟</div>
+        <div class="brand-text">
+          <h1>Özel Adımlar</h1>
+          <p>Yönetim & Öğretmen Portalı</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">Ana Menü</div>
+        <button class="nav-item active" data-view="overview">
+          <span class="icon">📊</span>
+          <span>Genel Bakış</span>
+        </button>
+        <button class="nav-item" data-view="evaluations">
+          <span class="icon">📋</span>
+          <span>Gelen Anketler</span>
+          <span class="nav-badge" id="evalBadge" style="display:none;">0</span>
+        </button>
+
+        <div class="nav-section-title">İçerik & Eğitim</div>
+        <button class="nav-item" data-view="recipes">
+          <span class="icon">🍳</span>
+          <span>Mutfak & Tarifler (Lezzet +1)</span>
+        </button>
+        <button class="nav-item" data-view="tasks">
+          <span class="icon">🎯</span>
+          <span>Görevler & Ödevler</span>
+        </button>
+
+        <div class="nav-section-title">Kullanıcı Yönetimi</div>
+        <button class="nav-item" data-view="students">
+          <span class="icon">👥</span>
+          <span>Öğrenci Takibi</span>
+        </button>
+        <button class="nav-item" data-view="teachers">
+          <span class="icon">👨‍🏫</span>
+          <span>Öğretmenler & Kadro</span>
+        </button>
+
+        <div class="nav-section-title">Sistem</div>
+        <button class="nav-item" data-view="cloud">
+          <span class="icon">☁️</span>
+          <span>Firebase & Bulut</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="cloud-status">
+          <div class="status-dot"></div>
+          <div>
+            <strong style="display:block; color:#fff;">Sistem Aktif</strong>
+            <span style="color:#94a3b8; font-size:11px;">Çocuk Terminali Köprüsü Hazır</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN WRAPPER -->
+    <div class="main-wrapper">
+      <!-- TOP HEADER -->
+      <header class="top-header">
+        <div class="header-left">
+          <button class="mobile-menu-btn" id="mobileMenuBtn">☰</button>
+          
+          <!-- Role Switcher Pill -->
+          <div class="role-switcher-container">
+            <button class="role-tab-btn active admin" id="roleAdminBtn">
+              <span>👑</span>
+              <span>Yönetici (Admin)</span>
+            </button>
+            <button class="role-tab-btn" id="roleTeacherBtn">
+              <span>🎓</span>
+              <span>Öğretmen</span>
+            </button>
+          </div>
+
+          <span class="status-badge published" id="userRoleBadge">👑 Kurum Yöneticisi (Admin)</span>
+        </div>
+
+        <div class="header-right">
+          <!-- Öğretmen Seçici -->
+          <div class="teacher-select-wrapper" id="teacherSelectWrapper" style="display:none;">
+            <label for="teacherSelect">Giriş Yapan:</label>
+            <select id="teacherSelect" class="teacher-select"></select>
+          </div>
+
+          <!-- Hızlı İşlem Butonları -->
+          <button class="btn btn-outline" onclick="openNewStudentModal()">
+            <span>➕</span>
+            <span>Öğrenci Ekle</span>
+          </button>
+          <button class="btn btn-outline" onclick="openNewTeacherModal()">
+            <span>➕</span>
+            <span>Öğretmen Ekle</span>
+          </button>
+          <button class="quick-action-btn" onclick="openNewRecipeModal()">
+            <span>🍳</span>
+            <span>Yeni Tarif Ekle</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- CONTENT BODY -->
+      <main class="content-body">
+        <!-- 1. GENEL BAKIŞ (OVERVIEW) -->
+        <section class="view-section active" id="view-overview">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Genel Bakış & Durum Raporu</h2>
+              <p>Öğrencilerin günlük anketleri, sınıf rutinleri ve Lezzet +1 mutfak tarifleri.</p>
+            </div>
+            <div>
+              <button class="btn btn-outline" onclick="openNewTaskModal()">🎯 Öğrenciye Görev Ata</button>
+            </div>
+          </div>
+
+          <!-- İstatistik Kartları -->
+          <div class="stats-grid" id="overviewStatsGrid"></div>
+
+          <!-- Son Gelen Anketler Tablosu -->
+          <div class="card-panel">
+            <div class="card-panel-header">
+              <div class="card-panel-title">
+                <span>📋</span>
+                <span>Son Gelen Değerlendirme Formları</span>
+              </div>
+              <button class="btn btn-outline" style="font-size:12px;" onclick="navigateTo('evaluations')">Tümünü Gör ➔</button>
+            </div>
+            <div style="overflow-x: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Öğrenci</th>
+                    <th>Form Türü</th>
+                    <th>Tarih & Saat</th>
+                    <th>Durum</th>
+                    <th>İşlem</th>
+                  </tr>
+                </thead>
+                <tbody id="overviewRecentFormsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. GELEN ANKETLER (EVALUATIONS) -->
+        <section class="view-section" id="view-evaluations">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Gelen Günlük Anketler & Değerlendirmeler</h2>
+              <p>Çocukların doldurduğu 'Okul, İşyeri, Tüm Gün' formlarını inceleyin ve geri bildirim verin.</p>
+            </div>
+          </div>
+
+          <div class="card-panel">
+            <div class="card-panel-header">
+              <div class="filter-group">
+                <input type="text" id="evalSearchInput" class="search-input" placeholder="Öğrenci ara...">
+                <select id="evalFilterType" class="filter-select">
+                  <option value="all">Tüm Form Türleri</option>
+                  <option value="okul">🏫 Okul Gözlem Formu</option>
+                  <option value="isyeri">💼 İşyeri & Staj Formu</option>
+                  <option value="tumGun">☀️ Tüm Gün Gözlem Formu</option>
+                </select>
+                <select id="evalFilterStatus" class="filter-select">
+                  <option value="all">Tüm Durumlar</option>
+                  <option value="pending">⏳ Bekleyenler</option>
+                  <option value="reviewed">✅ İncelenenler</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="overflow-x: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Öğrenci</th>
+                    <th>Form Başlığı</th>
+                    <th>Zaman</th>
+                    <th>Durum</th>
+                    <th>Öğretmen Notu</th>
+                    <th>İşlem</th>
+                  </tr>
+                </thead>
+                <tbody id="evaluationsTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. MUTFAK & TARİF SİHİRBAZI (RECIPES) -->
+        <section class="view-section" id="view-recipes">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Mutfak & Tarif Yönetimi (Lezzet +1 Kitabı)</h2>
+              <p>Mobil uygulamadaki 'Lezzet +1 Yemek Atölyesi' kitabının 21 resmi tarifi. İsterseniz düzenleyebilir veya yeni tarifler ekleyebilirsiniz.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openNewRecipeModal()">
+              <span>🍳</span>
+              <span>Yeni Tarif Ekle</span>
+            </button>
+          </div>
+
+          <div class="cards-grid" id="recipesGrid"></div>
+        </section>
+
+        <!-- 4. GÖREVLER (TASKS) -->
+        <section class="view-section" id="view-tasks">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Görevler & Bireysel Ödevler</h2>
+              <p>Çocuklara özel günlük veya haftalık sorumluluk görevleri atayın ve takibini yapın.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openNewTaskModal()">
+              <span>🎯</span>
+              <span>Yeni Görev Oluştur</span>
+            </button>
+          </div>
+
+          <div class="cards-grid" id="tasksGrid"></div>
+        </section>
+
+        <!-- 5. ÖĞRENCİLER (STUDENTS) -->
+        <section class="view-section" id="view-students">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Kayıtlı Öğrenciler & Gelişim Takibi</h2>
+              <p>Kurumdaki gerçek öğrencilerinizi ekleyin; yaş, teşhis, veli iletişim ve bütçe/kart harcama durumlarını yönetin.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openNewStudentModal()">
+              <span>➕</span>
+              <span>Yeni Öğrenci Ekle</span>
+            </button>
+          </div>
+
+          <div class="cards-grid" id="studentsGrid"></div>
+        </section>
+
+        <!-- 6. ÖĞRETMENLER (TEACHERS) -->
+        <section class="view-section" id="view-teachers">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Öğretmenler & Terapist Kadrosu</h2>
+              <p>Kurumdaki uzmanlar ve sorumlu oldukları özel gereksinimli bireyler.</p>
+            </div>
+            <button class="btn btn-primary" onclick="openNewTeacherModal()">
+              <span>➕</span>
+              <span>Yeni Öğretmen Ekle</span>
+            </button>
+          </div>
+
+          <div class="cards-grid" id="teachersGrid"></div>
+        </section>
+
+        <!-- 7. BULUT & FIREBASE -->
+        <section class="view-section" id="view-cloud">
+          <div class="view-header">
+            <div class="view-title-group">
+              <h2>Firebase & Bulut Entegrasyon Durumu</h2>
+              <p>Mobil uygulama ile web paneli arasındaki canlı veri akışı köprüsü.</p>
+            </div>
+          </div>
+
+          <div class="card-panel" style="padding:24px;">
+            <div style="display:flex; align-items:center; gap:16px; margin-bottom:18px;">
+              <div style="font-size:36px;">☁️</div>
+              <div>
+                <h3 style="font-family:var(--font-heading); font-size:18px;">Mobil Uygulama & Web Panel Eşleşme Güvencesi</h3>
+                <p style="font-size:14px; color:#64748b;">
+                  Mutfak tarifleri mobildeki <strong>Lezzet +1 Yemek Atölyesi</strong> ile birebir aynı kimliklere (ID) ve alanlara sahiptir. Firebase bağlandığında ikisi tek bir ortak <code>/kitchen_recipes</code> veritabanından beslenecek; mobilde başka burada başka hiçbir şey olmayacaktır!
+                </p>
+              </div>
+            </div>
+
+            <div style="background:#f8fafc; border-radius:12px; padding:18px; margin-bottom:20px; font-family:monospace; font-size:13px; line-height:1.6;">
+              <div>📂 /students (Öğrenci profilleri, bütçe, kart limiti)</div>
+              <div>📂 /evaluations (Çocukların gönderdiği günlük formlar)</div>
+              <div>📂 /kitchen_recipes (Lezzet +1 Kitabı ve Admin yeni tarifleri)</div>
+              <div>📂 /tasks (Çocuklara atanan görevler)</div>
+            </div>
+
+            <div style="display:flex; gap:12px;">
+              <button class="btn btn-outline" onclick="resetToEmptyState()">🧹 Ekranı Temizle (Sıfırla)</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODALLAR
+       ============================================================ -->
+
+  <!-- 1. YENİ ÖĞRENCİ EKLEME MODALI -->
+  <div class="modal-overlay" id="studentModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3>➕ Yeni Öğrenci Ekle</h3>
+        <button class="modal-close-btn" onclick="closeStudentModal()">&times;</button>
+      </div>
+
+      <div class="modal-content">
+        <div style="margin-bottom:12px;">
+          <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Öğrenci Adı Soyadı:</label>
+          <input type="text" id="studentName" class="search-input" style="width:100%;" placeholder="Örn: Ali Yılmaz">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 2fr; gap:12px; margin-bottom:12px;">
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Yaşı:</label>
+            <input type="number" id="studentAge" class="search-input" style="width:100%;" placeholder="14">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Özel Durum / Teşhis:</label>
+            <input type="text" id="studentDiagnosis" class="search-input" style="width:100%;" placeholder="Örn: Otizm Spektrum, Down Sendromu">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Veli Adı:</label>
+            <input type="text" id="studentParentName" class="search-input" style="width:100%;" placeholder="Örn: Ayşe Demir (Anne)">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Veli Telefonu:</label>
+            <input type="text" id="studentParentPhone" class="search-input" style="width:100%;" placeholder="05XX XXX XX XX">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+
+        </div>
+
+        <div>
+          <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Sorumlu Öğretmen:</label>
+          <select id="studentTeacherSelect" class="filter-select" style="width:100%;"></select>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeStudentModal()">İptal</button>
+        <button class="btn btn-primary" onclick="saveStudentForm()">💾 Öğrenciyi Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. YENİ ÖĞRETMEN EKLEME MODALI -->
+  <div class="modal-overlay" id="teacherModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3>➕ Yeni Öğretmen / Terapist Ekle</h3>
+        <button class="modal-close-btn" onclick="closeTeacherModal()">&times;</button>
+      </div>
+
+      <div class="modal-content">
+        <div style="margin-bottom:12px;">
+          <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Öğretmen Adı Soyadı:</label>
+          <input type="text" id="teacherName" class="search-input" style="width:100%;" placeholder="Örn: Ahmet Yılmaz">
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Unvan / Branş:</label>
+          <input type="text" id="teacherTitle" class="search-input" style="width:100%;" value="Özel Eğitim Uzmanı">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Telefon:</label>
+            <input type="text" id="teacherPhone" class="search-input" style="width:100%;" placeholder="05XX XXX XX XX">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">E-Posta:</label>
+            <input type="email" id="teacherEmail" class="search-input" style="width:100%;" placeholder="ogretmen@ozelapp.com">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeTeacherModal()">İptal</button>
+        <button class="btn btn-primary" onclick="saveTeacherForm()">💾 Öğretmeni Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. ANKET İNCELEME & DEĞERLENDİRME MODALI -->
+  <div class="modal-overlay" id="reviewModal">
+    <div class="modal-window large">
+      <div class="modal-header">
+        <div>
+          <h3 id="modalStudentName">Öğrenci Adı</h3>
+          <p id="modalFormTitle" style="font-size:13px; color:#64748b;">Değerlendirme Formu</p>
+        </div>
+        <button class="modal-close-btn" onclick="closeReviewModal()">&times;</button>
+      </div>
+
+      <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 16px; border-radius:8px; margin-bottom:16px;">
+          <span id="modalFormDate" style="font-size:13px; font-weight:600; color:#334155;">Tarih</span>
+          <span class="status-badge published" id="modalFormMood">Duygu</span>
+        </div>
+
+        <h4 style="font-size:14px; margin-bottom:10px; color:#475569;">Çocuğun Verdiği Yanıtlar:</h4>
+        <div class="eval-qa-list" id="modalQaList"></div>
+
+        <div style="border-top:1px solid #e2e8f0; padding-top:16px;">
+          <label style="font-size:14px; font-weight:700; display:block; margin-bottom:6px;">
+            🎓 Öğretmen / Terapist Değerlendirme Notu:
+          </label>
+          <div style="display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap;">
+            <button class="btn btn-outline" style="font-size:11px; padding:4px 8px;" onclick="quickInsertNote('Harikasın! 🌟')">🌟 Harikasın</button>
+            <button class="btn btn-outline" style="font-size:11px; padding:4px 8px;" onclick="quickInsertNote('Tebrikler çok iyi çaba 👏')">👏 Tebrikler</button>
+            <button class="btn btn-outline" style="font-size:11px; padding:4px 8px;" onclick="quickInsertNote('Yarın derste bu adımı tekrar edelim 📚')">📚 Yarın Tekrar Edelim</button>
+          </div>
+          <textarea id="modalTeacherNote" rows="3" style="width:100%; padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-family:var(--font-body); font-size:14px; outline:none;" placeholder="Öğrenciye ve veliye iletilecek notu yazın..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="copyReportForParent()">📲 Veliye WhatsApp Raporu Kopyala</button>
+        <button class="btn btn-success" onclick="saveFormReview()">💾 İncelendi Olarak Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. YENİ TARİF EKLEME SİHİRBAZI MODALI -->
+  <div class="modal-overlay" id="recipeModal">
+    <div class="modal-window large">
+      <div class="modal-header">
+        <h3 id="recipeModalTitle">🍳 Yeni Mutfak Tarifi Ekle</h3>
+        <button class="modal-close-btn" onclick="closeRecipeModal()">&times;</button>
+      </div>
+
+      <div class="modal-content">
+        <input type="hidden" id="recipeFormId">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:14px;">
+          <div>
+            <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Tarif Başlığı:</label>
+            <input type="text" id="recipeTitle" class="search-input" style="width:100%;" placeholder="Örn: Fırında Kaşarlı Tost">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Kategori:</label>
+            <select id="recipeCategory" class="filter-select" style="width:100%;">
+              <option value="Çorbalar">🥣 Çorbalar</option>
+              <option value="Salatalar">🥗 Salatalar</option>
+              <option value="Makarnalar">🍝 Makarnalar</option>
+              <option value="Sandviçler & Burgerler">🥪 Sandviçler & Burgerler</option>
+              <option value="Tatlılar & Hamur İşleri">🧁 Tatlılar & Hamur İşleri</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:14px;">
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Zorluk:</label>
+            <select id="recipeDifficulty" class="filter-select" style="width:100%;">
+              <option value="Çok Kolay">Çok Kolay</option>
+              <option value="Kolay" selected>Kolay</option>
+              <option value="Orta">Orta</option>
+              <option value="İleri">İleri</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Hazırlık / Pişirme:</label>
+            <input type="text" id="recipePrepTime" class="search-input" style="width:100%;" value="20 Dakika">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Porsiyon:</label>
+            <input type="text" id="recipeServings" class="search-input" style="width:100%;" value="4 Kişilik">
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Kısa Açıklama:</label>
+          <input type="text" id="recipeDescription" class="search-input" style="width:100%;" placeholder="Lezzet +1 Kitabından resimli ve sesli tarif...">
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0; padding-top:14px; margin-bottom:14px;">
+          <label style="font-size:13px; font-weight:700; display:block; margin-bottom:6px;">Malzemeler:</label>
+          <div style="display:flex; gap:8px; margin-bottom:8px;">
+            <input type="text" id="ingredientInput" class="search-input" style="flex:1;" placeholder="Malzeme yazın (Örn: 2 dilim ekmek)">
+            <button class="btn btn-outline" onclick="addIngredient()">➕ Ekle</button>
+          </div>
+          <div id="ingredientsChipsContainer"></div>
+        </div>
+
+        <div style="border-top:1px solid #e2e8f0; padding-top:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <label style="font-size:13px; font-weight:700;">Adım Adım Hazırlanış:</label>
+            <button class="btn btn-outline" style="font-size:12px;" onclick="addStepToRecipe()">➕ Yeni Adım Ekle</button>
+          </div>
+          <div id="stepsContainerInModal"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeRecipeModal()">Vazgeç</button>
+        <button class="btn btn-primary" onclick="saveRecipeForm()">🚀 Kaydet ve Çocuk Ekranına Gönder</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. YENİ GÖREV ATAMA MODALI -->
+  <div class="modal-overlay" id="taskModal">
+    <div class="modal-window">
+      <div class="modal-header">
+        <h3>🎯 Öğrenciye Görev / Ödev Ata</h3>
+        <button class="modal-close-btn" onclick="closeTaskModal()">&times;</button>
+      </div>
+
+      <div class="modal-content">
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Öğrenci Seçin:</label>
+          <select id="taskStudentSelect" class="filter-select" style="width:100%;"></select>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Görev Başlığı:</label>
+          <input type="text" id="taskTitle" class="search-input" style="width:100%;" placeholder="Örn: Akşam dişlerini fırçala">
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Kategori:</label>
+            <select id="taskCategory" class="filter-select" style="width:100%;">
+              <option value="Öz Bakım">🪥 Öz Bakım & Temizlik</option>
+              <option value="Okul & Sorumluluk">🎒 Okul & Sorumluluk</option>
+              <option value="Mutfak Becerileri">🍽️ Mutfak Becerileri</option>
+              <option value="Finans & Alışveriş">🧾 Finans & Alışveriş</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Simge:</label>
+            <select id="taskIcon" class="filter-select" style="width:100%;">
+              <option value="🎯">🎯 Hedef</option>
+              <option value="🪥">🪥 Diş Fırçası</option>
+              <option value="🎒">🎒 Çanta</option>
+              <option value="🍽️">🍽️ Tabak</option>
+              <option value="🧾">🧾 Fiş / Para</option>
+              <option value="🛌">🛌 Yatak</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:14px;">
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Bitiş Zamanı:</label>
+            <input type="text" id="taskDueDate" class="search-input" style="width:100%;" value="Bugün, 20:00">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Ödül Puanı:</label>
+            <input type="number" id="taskPoints" class="search-input" style="width:100%;" value="15">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Öncelik:</label>
+            <select id="taskPriority" class="filter-select" style="width:100%;">
+              <option value="medium">Normal</option>
+              <option value="high">Yüksek 🔥</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" onclick="closeTaskModal()">İptal</button>
+        <button class="btn btn-primary" onclick="saveTaskForm()">🚀 Görevi Ata</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST BİLDİRİM -->
+  <div id="toastNotification" style="position:fixed; bottom:24px; right:24px; background:#0f172a; color:#fff; padding:14px 20px; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.2); display:flex; align-items:center; gap:12px; z-index:9999; transform:translateY(100px); opacity:0; transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+    <div style="font-size:24px;">🔔</div>
+    <div>
+      <strong id="toastTitle" style="display:block; font-size:14px;">Bildirim</strong>
+      <span id="toastMessage" style="font-size:12px; color:#94a3b8;">İşlem tamamlandı.</span>
+    </div>
+  </div>
+
+  <style>
+    #toastNotification.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="js/data-service.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

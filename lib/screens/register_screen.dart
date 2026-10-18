@@ -7,6 +7,7 @@ import '../models/user_account.dart';
 import '../services/auth_service.dart';
 import '../services/game_progress_service.dart';
 import '../services/parent_child_sync_service.dart';
+import '../services/teacher_sync_service.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'parent_dashboard_screen.dart';
@@ -429,6 +430,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
     await prefs.setString('user_support_contacts', jsonEncode(finalContacts));
 
+    // CANLI SENKRONİZASYON: Yönetici ve Öğretmen Web Paneline Öğrenciyi Bildir
+    await TeacherSyncService.instance.registerStudent(
+      name: childName,
+      age: childAge,
+      diagnosis: _selectedDiagnosis,
+      parentName: parentName,
+      parentPhone: parentPhone,
+      avatar: _selectedAvatar,
+      address: address,
+      notes: notes,
+    );
+
     if (!mounted) return;
     final gameService = Provider.of<GameProgressService>(context, listen: false);
     await gameService.saveProfile(childName, _selectedAvatar);
@@ -533,6 +546,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (mounted) {
       final gameService = Provider.of<GameProgressService>(context, listen: false);
       await gameService.saveProfile(childName, _selectedAvatar);
+      // CANLI SENKRONİZASYON: Yönetici ve Öğretmen Web Paneline Öğrenciyi Bildir
+      await TeacherSyncService.instance.registerStudent(
+        name: childName,
+        age: childAge,
+        diagnosis: _selectedDiagnosis,
+        parentName: parentName,
+        parentPhone: parentPhone,
+        avatar: _selectedAvatar,
+        address: address,
+        notes: notes,
+      );
       await gameService.loadData();
     }
 
@@ -568,6 +592,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 : (isParentRole ? 'Veli Hesabı Oluştur' : 'Genel Bilgiler & Kayıt'))),
         elevation: 0,
         actions: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.positiveGreen,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              ),
+              icon: const Icon(Icons.check_circle_rounded, size: 18),
+              label: const Text('KAYDET', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              onPressed: _isLoading ? null : (widget.isEditing ? _handleSaveGeneralInfo : _handleRegister),
+            ),
+          ),
           if (widget.isOnboarding)
             TextButton.icon(
               onPressed: () async {

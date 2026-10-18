@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/game_progress_service.dart';
+import '../services/teacher_sync_service.dart';
 import '../services/timer_service.dart';
 import '../widgets/launcher_screen_icons.dart';
 
@@ -65,6 +66,7 @@ class HomeScreen extends StatelessWidget {
               children: avatars.map((av) => GestureDetector(
                 onTap: () {
                   game.saveProfile(game.childName, av);
+                  TeacherSyncService.instance.syncCurrentStudent();
                   Navigator.pop(ctx);
                 },
                 child: Container(
@@ -260,8 +262,8 @@ class HomeScreen extends StatelessWidget {
                               child: Row(
                                 children: [
                                   Container(
-                                    width: 42,
-                                    height: 42,
+                                    width: 38,
+                                    height: 38,
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF1F5F9),
                                       shape: BoxShape.circle,
@@ -274,8 +276,8 @@ class HomeScreen extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  const Expanded(
+                                  const SizedBox(width: 8),
+                                  const Flexible(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
@@ -323,7 +325,7 @@ class HomeScreen extends StatelessWidget {
                             );
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
                             decoration: BoxDecoration(
                               color: const Color(0xFFEFF6FF),
                               borderRadius: BorderRadius.circular(16),
@@ -375,7 +377,7 @@ class HomeScreen extends StatelessWidget {
                         child: Row(
                           children: [
                             const Icon(Icons.alarm_on_rounded, color: Color(0xFFDC2626), size: 26),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 8),
                             const Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,

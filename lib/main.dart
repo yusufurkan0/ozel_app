@@ -7,6 +7,7 @@ import 'screens/register_screen.dart';
 import 'services/game_progress_service.dart';
 import 'services/predictive_engine.dart';
 import 'services/timer_service.dart';
+import 'services/teacher_sync_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -93,6 +94,10 @@ class _AppStartupGateState extends State<AppStartupGate> {
         _needsInfoFilling = !infoCompleted && (!isRegistered || childName.trim().isEmpty);
         _loading = false;
       });
+    }
+
+    if (childName.trim().isNotEmpty) {
+      TeacherSyncService.instance.syncCurrentStudent();
     }
   }
 

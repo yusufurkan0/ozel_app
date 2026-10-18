@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/game_progress_service.dart';
+import '../services/teacher_sync_service.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 
@@ -136,6 +137,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.setString('sos_medical_notes', notes);
     await prefs.setString('child_diagnosis', _selectedDiagnosis);
     await prefs.setBool('is_registered', true);
+
+    // CANLI SENKRONİZASYON: Yönetici ve Öğretmen Web Paneline Öğrenciyi Bildir
+    TeacherSyncService.instance.registerStudent(
+      name: childName,
+      age: childAge,
+      diagnosis: _selectedDiagnosis,
+      parentName: parentName,
+      parentPhone: parentPhone,
+      avatar: _selectedAvatar,
+      address: address,
+      notes: notes,
+    );
 
     // Servis profilini kaydet
     if (!mounted) return;
