@@ -444,6 +444,69 @@ class PanelDataService {
       }
     }
   }
+
+  // Takma Ad ve Ek Metodlar (Alias & Helpers)
+  async saveRecipe(recipe) {
+    return this.addRecipe(recipe);
+  }
+
+  async deleteRecipe(id) {
+    this.recipes = this.recipes.filter((r) => r.id !== id);
+    if (this.db) {
+      try {
+        await this.db.collection('recipes').doc(id).delete();
+      } catch (e) {
+        console.warn('Firestore deleteRecipe error:', e);
+      }
+    }
+    fetch(`${this.apiBase}/api/recipes/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(console.error);
+  }
+
+  togglePublishRecipe(id) {
+    const r = this.recipes.find((rec) => rec.id === id);
+    if (r) {
+      r.isPublishedToApp = !r.isPublishedToApp;
+      if (this.db) {
+        try {
+          this.db.collection('recipes').doc(id).update({ isPublishedToApp: r.isPublishedToApp });
+        } catch (e) {
+          console.warn('Firestore togglePublishRecipe error:', e);
+        }
+      }
+    }
+    return r;
+  }
+
+  toggleTaskComplete(id) {
+    const task = this.tasks.find((t) => t.id === id);
+    if (task) {
+      task.isCompleted = !task.isCompleted;
+      if (this.db) {
+        try {
+          this.db.collection('tasks').doc(id).update({ isCompleted: task.isCompleted });
+        } catch (e) {
+          console.warn('Firestore toggleTask error:', e);
+        }
+      }
+    }
+    return task;
+  }
+
+  async reviewForm(formId, teacherNote) {
+    return this.saveReview(formId, teacherNote);
+  }
+
+  clearAllToEmpty() {
+    this.students = [];
+    this.teachers = [];
+    this.forms = [];
+    this.tasks = [];
+  }
 }
 
+// Instantiation
 const dataService = new PanelDataService();

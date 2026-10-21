@@ -464,7 +464,7 @@
           </div>
         </div>
 
-        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; margin-bottom:14px;">
           <div>
             <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Zorluk:</label>
             <select id="recipeDifficulty" class="filter-select" style="width:100%;">
@@ -475,8 +475,12 @@
             </select>
           </div>
           <div>
-            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Hazırlık / Pişirme:</label>
-            <input type="text" id="recipePrepTime" class="search-input" style="width:100%;" value="20 Dakika">
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Hazırlık:</label>
+            <input type="text" id="recipePrepTime" class="search-input" style="width:100%;" value="15 Dakika">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Pişirme:</label>
+            <input type="text" id="recipeCookTime" class="search-input" style="width:100%;" value="20 Dakika">
           </div>
           <div>
             <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Porsiyon:</label>
@@ -484,9 +488,15 @@
           </div>
         </div>
 
-        <div style="margin-bottom:14px;">
-          <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Kısa Açıklama:</label>
-          <input type="text" id="recipeDescription" class="search-input" style="width:100%;" placeholder="Lezzet +1 Kitabından resimli ve sesli tarif...">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+          <div>
+            <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Kısa Açıklama:</label>
+            <input type="text" id="recipeDescription" class="search-input" style="width:100%;" placeholder="Lezzet +1 Kitabından resimli ve sesli tarif...">
+          </div>
+          <div>
+            <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Tarif Görsel Linki (URL):</label>
+            <input type="text" id="recipeImageUrl" class="search-input" style="width:100%;" placeholder="https://images.unsplash.com/photo-...">
+          </div>
         </div>
 
         <div style="border-top:1px solid #e2e8f0; padding-top:14px; margin-bottom:14px;">
