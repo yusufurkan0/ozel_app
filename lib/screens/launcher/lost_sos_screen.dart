@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -919,27 +920,50 @@ class _LostSosScreenState extends State<LostSosScreen> {
             children: [
               TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Adı Soyadı', hintText: 'Öğrencinin adı soyadı'),
+                maxLength: 50,
+                inputFormatters: [LengthLimitingTextInputFormatter(50)],
+                decoration: const InputDecoration(
+                  labelText: 'Adı Soyadı',
+                  hintText: 'Öğrencinin adı soyadı',
+                  counterText: '',
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: phoneCtrl,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Aile Telefon Numarası', hintText: 'Örn: 05xx xxx xx xx'),
+                maxLength: 11,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(11),
+                ],
+                decoration: const InputDecoration(
+                  labelText: 'Aile Telefon Numarası (En Fazla 11 Hane)',
+                  hintText: 'Örn: 05xxxxxxxxx',
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: addressCtrl,
                 maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Ev Adresi', hintText: 'Mahalle, Sokak, No, İlçe'),
+                maxLength: 250,
+                inputFormatters: [LengthLimitingTextInputFormatter(250)],
+                decoration: const InputDecoration(
+                  labelText: 'Ev Adresi',
+                  hintText: 'Mahalle, Sokak, No, İlçe',
+                  counterText: '',
+                ),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: notesCtrl,
                 maxLines: 2,
+                maxLength: 300,
+                inputFormatters: [LengthLimitingTextInputFormatter(300)],
                 decoration: const InputDecoration(
                   labelText: 'Önemli Sağlık / Özel Not',
                   hintText: 'Örn: Konuşma güçlüğü çekebilir, sakin yaklaşınız.',
+                  counterText: '',
                 ),
               ),
             ],

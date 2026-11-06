@@ -51,10 +51,8 @@ class PanelDataService {
             data.id = doc.id;
             list.push(data);
           });
-          if (list.length > 0 || snapshot.metadata.hasPendingWrites === false) {
-            this.students = list;
-            if (typeof renderCurrentView === 'function') renderCurrentView();
-          }
+          this.students = list;
+          if (typeof renderCurrentView === 'function') renderCurrentView();
         }, (err) => console.warn('Firestore students stream:', err));
 
         // CANLI ANKETLER / DEĞERLENDİRME FORMLARI DİNLEYİCİSİ
@@ -97,6 +95,24 @@ class PanelDataService {
           this.tasks = list;
           if (typeof renderCurrentView === 'function') renderCurrentView();
         }, (err) => console.warn('Firestore tasks stream:', err));
+
+        // CANLI ÖĞRETMENLER DİNLEYİCİSİ (Realtime Teachers Snapshot)
+        this.db.collection('teachers').onSnapshot((snapshot) => {
+          const list = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            data.id = doc.id;
+            list.push(data);
+          });
+          if (list.length > 0 || snapshot.metadata.hasPendingWrites === false) {
+            this.teachers = list;
+            if (this.teachers.length > 0 && !this.activeTeacherId) {
+              this.activeTeacherId = this.teachers[0].id;
+            }
+            if (typeof setupTeacherSelector === 'function') setupTeacherSelector();
+            if (typeof renderCurrentView === 'function') renderCurrentView();
+          }
+        }, (err) => console.warn('Firestore teachers stream:', err));
       }
     } catch (e) {
       console.warn('Firebase init fallback:', e);
@@ -138,6 +154,52 @@ class PanelDataService {
       this.eventSource.addEventListener('student_deleted', (e) => {
         const payload = JSON.parse(e.data).data;
         this.students = this.students.filter((s) => s.id !== payload.id);
+        if (typeof renderCurrentView === 'function') renderCurrentView();
+      });
+
+      // Yeni Değerlendirme Anketi Geldiğinde
+      this.eventSource.addEventListener('new_evaluation', (e) => {
+        const newEval = JSON.parse(e.data).data;
+        if (!this.forms.some((f) => f.id === newEval.id)) {
+          this.forms.unshift(newEval);
+          if (typeof showToast === 'function') {
+            showToast('📋 Yeni Anket Geldi!', `${newEval.studentName} "${newEval.formTitle}" formunu gönderdi.`);
+          }
+          if (typeof renderCurrentView === 'function') renderCurrentView();
+        }
+      });
+
+      // Görev Eklendiğinde veya Güncellendiğinde
+      this.eventSource.addEventListener('task_added', (e) => {
+        const newTask = JSON.parse(e.data).data;
+        if (!this.tasks.some((t) => t.id === newTask.id)) {
+          this.tasks.unshift(newTask);
+          if (typeof renderCurrentView === 'function') renderCurrentView();
+        }
+      });
+
+      this.eventSource.addEventListener('task_updated', (e) => {
+        const updated = JSON.parse(e.data).data;
+        if (updated && updated.id) {
+          const idx = this.tasks.findIndex((t) => t.id === updated.id);
+          if (idx >= 0) {
+            this.tasks[idx].isCompleted = updated.isCompleted;
+            if (typeof renderCurrentView === 'function') renderCurrentView();
+          }
+        }
+      });
+
+      this.eventSource.addEventListener('task_deleted', (e) => {
+        const payload = JSON.parse(e.data).data;
+        this.tasks = this.tasks.filter((t) => t.id !== payload.id);
+        if (typeof renderCurrentView === 'function') renderCurrentView();
+      });
+
+      this.eventSource.addEventListener('database_reset', () => {
+        this.students = [];
+        this.teachers = [];
+        this.forms = [];
+        this.tasks = [];
         if (typeof renderCurrentView === 'function') renderCurrentView();
       });
 
@@ -234,6 +296,14 @@ class PanelDataService {
     teacher.assignedStudentIds = teacher.assignedStudentIds || [];
     this.teachers.push(teacher);
 
+    if (this.db) {
+      try {
+        await this.db.collection('teachers').doc(teacher.id).set(teacher, { merge: true });
+      } catch (e) {
+        console.warn('Firestore addTeacher error:', e);
+      }
+    }
+
     fetch(`${this.apiBase}/api/teachers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -243,8 +313,20 @@ class PanelDataService {
     return teacher;
   }
 
-  deleteTeacher(id) {
+  async deleteTeacher(id) {
     this.teachers = this.teachers.filter((t) => t.id !== id);
+    if (this.db) {
+      try {
+        await this.db.collection('teachers').doc(id).delete();
+      } catch (e) {
+        console.warn('Firestore deleteTeacher error:', e);
+      }
+    }
+    fetch(`${this.apiBase}/api/teachers/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(console.error);
   }
 
   // Öğrenciler
@@ -287,16 +369,29 @@ class PanelDataService {
 
   async deleteStudent(id) {
     this.students = this.students.filter((s) => s.id !== id);
+    if (typeof renderCurrentView === 'function') renderCurrentView();
 
-    // Firebase Firestore'dan anında sil
+    // 1. Firebase Firestore SDK üzerinden sil
     if (this.db) {
       try {
         await this.db.collection('students').doc(id).delete();
       } catch (e) {
-        console.warn('Firestore delete error:', e);
+        console.warn('Firestore SDK delete error:', e);
       }
     }
 
+    // 2. Doğrudan Firestore REST API üzerinden sil (Tarayıcı eklentisi / WebSocket engeline karşı %100 garanti)
+    try {
+      const encodedId = encodeURIComponent(id);
+      await fetch(
+        `https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/students/${encodedId}`,
+        { method: 'DELETE' }
+      );
+    } catch (e) {
+      console.warn('Firestore REST delete error:', e);
+    }
+
+    // 3. Yerel sunucudan sil
     try {
       await fetch(`${this.apiBase}/api/students/delete`, {
         method: 'POST',
@@ -443,6 +538,11 @@ class PanelDataService {
         console.warn('Firestore deleteTask error:', e);
       }
     }
+    fetch(`${this.apiBase}/api/tasks/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(console.error);
   }
 
   // Takma Ad ve Ek Metodlar (Alias & Helpers)
@@ -472,11 +572,16 @@ class PanelDataService {
       r.isPublishedToApp = !r.isPublishedToApp;
       if (this.db) {
         try {
-          this.db.collection('recipes').doc(id).update({ isPublishedToApp: r.isPublishedToApp });
+          this.db.collection('recipes').doc(id).set(r, { merge: true });
         } catch (e) {
           console.warn('Firestore togglePublishRecipe error:', e);
         }
       }
+      fetch(`${this.apiBase}/api/recipes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(r),
+      }).catch(console.error);
     }
     return r;
   }
@@ -492,6 +597,11 @@ class PanelDataService {
           console.warn('Firestore toggleTask error:', e);
         }
       }
+      fetch(`${this.apiBase}/api/tasks/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isCompleted: task.isCompleted }),
+      }).catch(console.error);
     }
     return task;
   }
@@ -500,11 +610,41 @@ class PanelDataService {
     return this.saveReview(formId, teacherNote);
   }
 
-  clearAllToEmpty() {
+  async clearAllToEmpty() {
+    const oldStudents = [...this.students];
+    const oldTeachers = [...this.teachers];
+    const oldForms = [...this.forms];
+    const oldTasks = [...this.tasks];
+
     this.students = [];
     this.teachers = [];
     this.forms = [];
     this.tasks = [];
+
+    if (this.db) {
+      try {
+        for (const s of oldStudents) {
+          if (s.id) this.db.collection('students').doc(s.id).delete().catch(() => {});
+        }
+        for (const t of oldTeachers) {
+          if (t.id) this.db.collection('teachers').doc(t.id).delete().catch(() => {});
+        }
+        for (const f of oldForms) {
+          if (f.id) this.db.collection('evaluations').doc(f.id).delete().catch(() => {});
+        }
+        for (const tsk of oldTasks) {
+          if (tsk.id) this.db.collection('tasks').doc(tsk.id).delete().catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Firestore clearAllToEmpty error:', e);
+      }
+    }
+
+    fetch(`${this.apiBase}/api/reset-data`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).catch(console.error);
   }
 }
 

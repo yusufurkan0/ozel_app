@@ -5735,6 +5735,20 @@
   ],
   "tasks": [
     {
+      "studentId": "std_bek_i̇sm",
+      "studentName": "Bek İsm",
+      "title": "abosbek",
+      "category": "Öz Bakım",
+      "icon": "🎯",
+      "dueDate": "Bugün, 20:00",
+      "priority": "medium",
+      "points": 15,
+      "assignedBy": "Yönetici (Admin)",
+      "id": "tsk_1792659882819",
+      "isCompleted": false,
+      "createdAt": "2026-10-22T09:04:42.819Z"
+    },
+    {
       "studentId": "std_deneme",
       "studentName": "deneme",
       "title": "deneme",
@@ -5762,5 +5776,5 @@
       "isCompleted": false
     }
   ],
-  "lastUpdated": 1792236438.192641
+  "lastUpdated": 1793977020.2479174
 }

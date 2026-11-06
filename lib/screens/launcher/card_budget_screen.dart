@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1006,9 +1007,12 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
 
                   TextField(
                     controller: titleCtrl,
+                    maxLength: 50,
+                    inputFormatters: [LengthLimitingTextInputFormatter(50)],
                     decoration: InputDecoration(
                       labelText: 'Harcama Açıklaması',
                       hintText: 'Örn: Market, Ulaşım, Kitap',
+                      counterText: '',
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -1018,10 +1022,16 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                   TextField(
                     controller: amountCtrl,
                     keyboardType: TextInputType.number,
+                    maxLength: 7,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(7),
+                    ],
                     decoration: InputDecoration(
                       labelText: 'Harcama Tutarı (TL) *',
                       hintText: 'Örn: 150',
                       prefixText: '₺ ',
+                      counterText: '',
                       filled: true,
                       fillColor: const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -1254,9 +1264,15 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                 TextField(
                   controller: limitCtrl,
                   keyboardType: TextInputType.number,
+                  maxLength: 7,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(7),
+                  ],
                   decoration: InputDecoration(
                     labelText: 'Aylık Limit (TL)',
                     prefixText: '₺ ',
+                    counterText: '',
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -1554,7 +1570,7 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // 📉 GÖRSEL OLARAK AZALAN ŞEKİL (DİNAMİK ÇUBUK)
+                      // 📉 SADECE ŞERİTTE YEŞİL (KALAN) & KIRMIZI (HARCANAN) GÖRSELİ
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1563,19 +1579,39 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                             style: TextStyle(color: Colors.white70, fontSize: 11.5, fontWeight: FontWeight.w600),
                           ),
                           Text(
-                            '%${(remainingRatio * 100).toInt()} Kalan',
-                            style: TextStyle(color: statusColor.computeLuminance() > 0.5 ? Colors.white : Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            '%${(remainingRatio * 100).round()} Kalan',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                           ),
                         ],
                       ),
                       const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: LinearProgressIndicator(
-                          value: remainingRatio,
-                          minHeight: 14,
-                          backgroundColor: Colors.white.withValues(alpha: 0.25),
-                          color: statusColor,
+                      Container(
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white24, width: 1),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(9),
+                          child: Row(
+                            children: [
+                              if (remainingRatio > 0)
+                                Expanded(
+                                  flex: (remainingRatio * 1000).round().clamp(1, 1000),
+                                  child: Container(
+                                    color: const Color(0xFF22C55E),
+                                  ),
+                                ),
+                              if (spentRatio > 0)
+                                Expanded(
+                                  flex: (spentRatio * 1000).round().clamp(1, 1000),
+                                  child: Container(
+                                    color: const Color(0xFFEF4444),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -1583,14 +1619,16 @@ class _CardBudgetScreenState extends State<CardBudgetScreen> {
                       // 10 Dilimli Azalan Görsel Segment Blokları
                       Row(
                         children: List.generate(10, (index) {
-                          final blockThreshold = (index + 1) / 10.0;
+                          final blockThreshold = (index + 0.5) / 10.0;
                           final isFilled = remainingRatio >= blockThreshold;
                           return Expanded(
                             child: Container(
                               margin: const EdgeInsets.symmetric(horizontal: 1.5),
                               height: 6,
                               decoration: BoxDecoration(
-                                color: isFilled ? statusColor : Colors.white.withValues(alpha: 0.2),
+                                color: isFilled
+                                    ? const Color(0xFF4ADE80)
+                                    : const Color(0xFFEF4444).withValues(alpha: 0.75),
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),

@@ -218,6 +218,161 @@
           <div class="cards-grid" id="recipesGrid"></div>
         </section>
 
+        <!-- 3B. YENİ TARİF OLUŞTURMA & GÖRSEL AŞAMA STÜDYOSU (TAM EKRAN) -->
+        <section class="view-section" id="view-recipe-editor">
+          <div class="view-header" style="background:#fff; padding:18px 24px; border-radius:16px; border:1px solid #e2e8f0; margin-bottom:24px; box-shadow:0 4px 12px rgba(15,23,42,0.04);">
+            <div style="display:flex; align-items:center; gap:14px;">
+              <button class="btn btn-outline" onclick="closeRecipeModal()" style="padding:10px 16px; font-weight:700;">
+                ⬅️ Tariflere Dön
+              </button>
+              <div class="view-title-group">
+                <h2 id="recipeModalTitle" style="margin:0; font-size:22px;">🍳 Yeni Mutfak Tarifi & Görsel Aşama Stüdyosu</h2>
+                <p style="margin:4px 0 0 0; color:#64748b; font-size:13.5px;">Tarif kapak fotoğrafını, malzemeleri ve her aşamanın görselini/açıklamasını tek ekrandan rahatça ekleyin.</p>
+              </div>
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-outline" onclick="closeRecipeModal()">Vazgeç</button>
+              <button class="btn btn-primary" style="padding:12px 22px; font-size:14px; font-weight:700;" onclick="saveRecipeForm()">
+                🚀 Kaydet ve Çocuk Ekranına Gönder
+              </button>
+            </div>
+          </div>
+
+          <input type="hidden" id="recipeFormId">
+
+          <!-- BÖLÜM 1: TEMEL BİLGİLER & KAPAK GÖRSELİ -->
+          <div class="card-panel" style="padding:26px; margin-bottom:24px;">
+            <h3 style="font-size:17px; font-weight:700; color:#0f172a; margin-bottom:18px; display:flex; align-items:center; gap:8px;">
+              <span>📌</span> <span>1. Tarifin Genel Bilgileri ve Kapak Görseli</span>
+            </h3>
+
+            <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap:28px; align-items:start;">
+              <!-- Sol Sütun: Form Alanları -->
+              <div>
+                <div style="display:grid; grid-template-columns: 1.3fr 1fr; gap:16px; margin-bottom:16px;">
+                  <div>
+                    <label style="font-size:13px; font-weight:700; color:#334155; display:block; margin-bottom:6px;">Tarif Başlığı *</label>
+                    <input type="text" id="recipeTitle" class="search-input" style="width:100%; font-size:15px; padding:11px 14px;" placeholder="Örn: Fırında Kaşarlı Tost">
+                  </div>
+                  <div>
+                    <label style="font-size:13px; font-weight:700; color:#334155; display:block; margin-bottom:6px;">Kategori</label>
+                    <select id="recipeCategory" class="filter-select" style="width:100%; font-size:14px; padding:11px 14px;">
+                      <option value="Çorbalar">🥣 Çorbalar</option>
+                      <option value="Salatalar">🥗 Salatalar</option>
+                      <option value="Makarnalar">🍝 Makarnalar</option>
+                      <option value="Sandviçler & Burgerler">🥪 Sandviçler & Burgerler</option>
+                      <option value="Tatlılar & Hamur İşleri">🧁 Tatlılar & Hamur İşleri</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; margin-bottom:16px;">
+                  <div>
+                    <label style="font-size:12.5px; font-weight:700; color:#334155; display:block; margin-bottom:6px;">Zorluk</label>
+                    <select id="recipeDifficulty" class="filter-select" style="width:100%; padding:10px;">
+                      <option value="Çok Kolay">Çok Kolay</option>
+                      <option value="Kolay" selected>Kolay</option>
+                      <option value="Orta">Orta</option>
+                      <option value="İleri">İleri</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:12.5px; font-weight:700; color:#334155; display:block; margin-bottom:6px;">Hazırlık Süresi</label>
+                    <input type="text" id="recipePrepTime" class="search-input" style="width:100%; padding:10px;" value="15 Dakika">
+                  </div>
+                  <div>
+                    <label style="font-size:12.5px; font-weight:700; color:#334155; display:block; margin-bottom:6px;">Pişirme Süresi</label>
+                    <input type="text" id="recipeCookTime" class="search-input" style="width:100%; padding:10px;" value="20 Dakika">
+                  </div>
+                  <div>
+                    <label style="font-size:12.5px; font-weight:700; color:#334155; display:block; margin-bottom:6px;">Porsiyon</label>
+                    <input type="text" id="recipeServings" class="search-input" style="width:100%; padding:10px;" value="4 Kişilik">
+                  </div>
+                </div>
+
+                <div>
+                  <label style="font-size:13px; font-weight:700; color:#334155; display:block; margin-bottom:6px;">Kısa Açıklama / Alt Başlık</label>
+                  <textarea id="recipeDescription" rows="3" class="search-input" style="width:100%; padding:11px 14px; font-family:var(--font-body); resize:vertical;" placeholder="Örn: Adım adım kronometre ve görsel destekli pratik tarif..."></textarea>
+                </div>
+              </div>
+
+              <!-- Sağ Sütun: Kapak Görseli Seçici & Önizleme -->
+              <div style="background:#f8fafc; border:2px dashed #cbd5e1; border-radius:16px; padding:18px; text-align:center;">
+                <label style="font-size:13px; font-weight:700; color:#334155; display:block; margin-bottom:10px;">📸 Tarif Kapak Görseli</label>
+                <div id="recipeCoverPreviewWrap" style="width:100%; height:180px; border-radius:12px; background:#e2e8f0; display:flex; align-items:center; justify-content:center; overflow:hidden; margin-bottom:12px; position:relative;">
+                  <span id="recipeCoverPlaceholder" style="color:#64748b; font-size:13px;">Görsel seçilmedi (Varsayılan kapak kullanılır)</span>
+                  <img id="recipeCoverPreviewImg" src="" alt="Kapak Önizleme" style="width:100%; height:100%; object-fit:cover; display:none;">
+                </div>
+                <div style="display:flex; gap:8px; justify-content:center; margin-bottom:10px;">
+                  <label class="btn btn-primary" style="cursor:pointer; font-size:12.5px; padding:8px 14px;">
+                    📁 Bilgisayardan Görsel Seç
+                    <input type="file" id="recipeCoverFileInput" accept="image/*" style="display:none;" onchange="handleRecipeCoverUpload(this)">
+                  </label>
+                  <button type="button" class="btn btn-outline" style="font-size:12px; padding:8px 12px;" onclick="clearRecipeCoverImage()">🗑️ Temizle</button>
+                </div>
+                <input type="text" id="recipeImageUrl" class="search-input" style="width:100%; font-size:12px; padding:8px 10px;" placeholder="veya görsel linki (URL) yapıştırın..." oninput="updateRecipeCoverPreviewFromUrl(this.value)">
+              </div>
+            </div>
+          </div>
+
+          <!-- BÖLÜM 2: MALZEMELER VE ARAÇLAR -->
+          <div class="card-panel" style="padding:26px; margin-bottom:24px;">
+            <h3 style="font-size:17px; font-weight:700; color:#0f172a; margin-bottom:6px; display:flex; align-items:center; gap:8px;">
+              <span>🧺</span> <span>2. Malzemeler ve Gerekli Mutfak Araçları</span>
+            </h3>
+            <p style="font-size:13px; color:#64748b; margin-bottom:16px;">Çocuğun tarif başlamadan önce kontrol listesinde tek tek işaretleyeceği malzemeleri ekleyin.</p>
+
+            <div style="display:flex; gap:10px; margin-bottom:12px;">
+              <input type="text" id="ingredientInput" class="search-input" style="flex:1; font-size:14.5px; padding:11px 14px;" placeholder="Malzeme veya araç yazın (Örn: 2 dilim tost ekmeği, 1 adet kesme tahtası)..." onkeydown="if(event.key==='Enter'){event.preventDefault(); addIngredient();}">
+              <button type="button" class="btn btn-primary" style="padding:11px 20px; font-weight:700;" onclick="addIngredient()">➕ Malzeme Ekle</button>
+            </div>
+
+            <!-- Hızlı Malzeme/Araç Öneri Çipleri -->
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">
+              <span style="font-size:12px; color:#64748b; align-self:center; margin-right:4px;">Hızlı Ekle:</span>
+              <button type="button" class="btn btn-outline" style="font-size:11.5px; padding:4px 10px;" onclick="quickAddIngredient('1 adet Kesme Tahtası')">+ Kesme Tahtası</button>
+              <button type="button" class="btn btn-outline" style="font-size:11.5px; padding:4px 10px;" onclick="quickAddIngredient('1 adet Yemek Kaşığı')">+ Yemek Kaşığı</button>
+              <button type="button" class="btn btn-outline" style="font-size:11.5px; padding:4px 10px;" onclick="quickAddIngredient('1 adet Su Bardağı')">+ Su Bardağı</button>
+              <button type="button" class="btn btn-outline" style="font-size:11.5px; padding:4px 10px;" onclick="quickAddIngredient('1 adet Karıştırma Kabı')">+ Karıştırma Kabı</button>
+              <button type="button" class="btn btn-outline" style="font-size:11.5px; padding:4px 10px;" onclick="quickAddIngredient('1 çay kaşığı Tuz')">+ 1 çay kaşığı Tuz</button>
+              <button type="button" class="btn btn-outline" style="font-size:11.5px; padding:4px 10px;" onclick="quickAddIngredient('2 yemek kaşığı Zeytinyağı')">+ Zeytinyağı</button>
+            </div>
+
+            <div id="ingredientsChipsContainer" style="display:flex; flex-wrap:wrap; gap:8px; min-height:38px; padding:12px; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0;"></div>
+          </div>
+
+          <!-- BÖLÜM 3: ADIM ADIM HAZIRLANIŞ VE GÖRSEL AŞAMALAR -->
+          <div class="card-panel" style="padding:26px; margin-bottom:28px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; flex-wrap:wrap; gap:12px;">
+              <div>
+                <h3 style="font-size:17px; font-weight:700; color:#0f172a; margin:0 0 4px 0; display:flex; align-items:center; gap:8px;">
+                  <span>🪜</span> <span>3. Adım Adım Hazırlanış Aşamaları (Görselli & Sesli)</span>
+                </h3>
+                <p style="font-size:13px; color:#64748b; margin:0;">Her aşama için çocuğun ekranda göreceği fotoğrafı, yönerge metnini ve varsa bekleme süresini doğrudan kart üzerinde doldurun.</p>
+              </div>
+              <button type="button" class="btn btn-primary" style="padding:11px 18px; font-weight:700;" onclick="addStepToRecipe()">
+                ➕ Yeni Aşama (Adım) Kartı Ekle
+              </button>
+            </div>
+
+            <div id="stepsContainerInModal" style="display:flex; flex-direction:column; gap:18px;"></div>
+
+            <div style="margin-top:20px; text-align:center;">
+              <button type="button" class="btn btn-outline" style="width:100%; padding:14px; border:2px dashed #94a3b8; font-weight:700; font-size:14px; color:#1e40af; background:#eff6ff;" onclick="addStepToRecipe()">
+                ➕ Yeni Bir Hazırlanış Aşaması Daha Ekle
+              </button>
+            </div>
+          </div>
+
+          <!-- ALT KAYDET BARI -->
+          <div style="display:flex; justify-content:flex-end; gap:12px; padding-bottom:40px;">
+            <button type="button" class="btn btn-outline" style="padding:12px 24px;" onclick="closeRecipeModal()">⬅️ Vazgeç</button>
+            <button type="button" class="btn btn-primary" style="padding:14px 28px; font-size:15px; font-weight:700;" onclick="saveRecipeForm()">
+              🚀 Tarifi Kaydet ve Çocuk Ekranına Gönder
+            </button>
+          </div>
+        </section>
+
         <!-- 4. GÖREVLER (TASKS) -->
         <section class="view-section" id="view-tasks">
           <div class="view-header">
@@ -437,92 +592,7 @@
     </div>
   </div>
 
-  <!-- 4. YENİ TARİF EKLEME SİHİRBAZI MODALI -->
-  <div class="modal-overlay" id="recipeModal">
-    <div class="modal-window large">
-      <div class="modal-header">
-        <h3 id="recipeModalTitle">🍳 Yeni Mutfak Tarifi Ekle</h3>
-        <button class="modal-close-btn" onclick="closeRecipeModal()">&times;</button>
-      </div>
-
-      <div class="modal-content">
-        <input type="hidden" id="recipeFormId">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:14px;">
-          <div>
-            <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Tarif Başlığı:</label>
-            <input type="text" id="recipeTitle" class="search-input" style="width:100%;" placeholder="Örn: Fırında Kaşarlı Tost">
-          </div>
-          <div>
-            <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Kategori:</label>
-            <select id="recipeCategory" class="filter-select" style="width:100%;">
-              <option value="Çorbalar">🥣 Çorbalar</option>
-              <option value="Salatalar">🥗 Salatalar</option>
-              <option value="Makarnalar">🍝 Makarnalar</option>
-              <option value="Sandviçler & Burgerler">🥪 Sandviçler & Burgerler</option>
-              <option value="Tatlılar & Hamur İşleri">🧁 Tatlılar & Hamur İşleri</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; margin-bottom:14px;">
-          <div>
-            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Zorluk:</label>
-            <select id="recipeDifficulty" class="filter-select" style="width:100%;">
-              <option value="Çok Kolay">Çok Kolay</option>
-              <option value="Kolay" selected>Kolay</option>
-              <option value="Orta">Orta</option>
-              <option value="İleri">İleri</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Hazırlık:</label>
-            <input type="text" id="recipePrepTime" class="search-input" style="width:100%;" value="15 Dakika">
-          </div>
-          <div>
-            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Pişirme:</label>
-            <input type="text" id="recipeCookTime" class="search-input" style="width:100%;" value="20 Dakika">
-          </div>
-          <div>
-            <label style="font-size:12px; font-weight:600; display:block; margin-bottom:4px;">Porsiyon:</label>
-            <input type="text" id="recipeServings" class="search-input" style="width:100%;" value="4 Kişilik">
-          </div>
-        </div>
-
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
-          <div>
-            <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Kısa Açıklama:</label>
-            <input type="text" id="recipeDescription" class="search-input" style="width:100%;" placeholder="Lezzet +1 Kitabından resimli ve sesli tarif...">
-          </div>
-          <div>
-            <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Tarif Görsel Linki (URL):</label>
-            <input type="text" id="recipeImageUrl" class="search-input" style="width:100%;" placeholder="https://images.unsplash.com/photo-...">
-          </div>
-        </div>
-
-        <div style="border-top:1px solid #e2e8f0; padding-top:14px; margin-bottom:14px;">
-          <label style="font-size:13px; font-weight:700; display:block; margin-bottom:6px;">Malzemeler:</label>
-          <div style="display:flex; gap:8px; margin-bottom:8px;">
-            <input type="text" id="ingredientInput" class="search-input" style="flex:1;" placeholder="Malzeme yazın (Örn: 2 dilim ekmek)">
-            <button class="btn btn-outline" onclick="addIngredient()">➕ Ekle</button>
-          </div>
-          <div id="ingredientsChipsContainer"></div>
-        </div>
-
-        <div style="border-top:1px solid #e2e8f0; padding-top:14px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <label style="font-size:13px; font-weight:700;">Adım Adım Hazırlanış:</label>
-            <button class="btn btn-outline" style="font-size:12px;" onclick="addStepToRecipe()">➕ Yeni Adım Ekle</button>
-          </div>
-          <div id="stepsContainerInModal"></div>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="closeRecipeModal()">Vazgeç</button>
-        <button class="btn btn-primary" onclick="saveRecipeForm()">🚀 Kaydet ve Çocuk Ekranına Gönder</button>
-      </div>
-    </div>
-  </div>
+  <!-- 4. YENİ TARİF EKLEME ARTIK TAM EKRAN (#view-recipe-editor) OLARAK ÇALIŞMAKTADIR -->
 
   <!-- 5. YENİ GÖREV ATAMA MODALI -->
   <div class="modal-overlay" id="taskModal">

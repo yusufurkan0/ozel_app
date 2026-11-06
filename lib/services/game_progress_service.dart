@@ -17,7 +17,7 @@ class GameProgressService extends ChangeNotifier {
 
   // ─── Çocuk Profili ───────────────────────────
   String _childName = '';
-  String _avatar = '🐻';
+  String _avatar = 'assets/images/avatars/avatar_1.jpg';
   String _birthDate = '';
   String _height = '';
   String _weight = '';

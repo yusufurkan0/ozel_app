@@ -32,6 +32,7 @@ class EvalQuestion {
   final List<String>? options;
   final List<String>? quickSuggestions;
   final String? followUpIfYes;
+  final String? dependsOnYesOf;
   final String? hint;
 
   const EvalQuestion({
@@ -41,6 +42,7 @@ class EvalQuestion {
     this.options,
     this.quickSuggestions,
     this.followUpIfYes,
+    this.dependsOnYesOf,
     this.hint,
   });
 }
@@ -286,6 +288,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
         id: 'is_zorluk_cozum',
         text: 'Bugün işimde karşılaştığım zorlukları nasıl çözdüm?',
         inputType: QuestionInputType.singleChoice,
+        dependsOnYesOf: 'is_zorluk_cektim_mi',
         options: [
           'Karşılaştığım zorluğu çözemedim',
           'Kendi başıma çözdüm.',
@@ -317,6 +320,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
         id: 'is_gorevi_yerine_getirdim_mi',
         text: 'Bugün iş arkadaşımın benden istediği görevi yerine getirdim mi?',
         inputType: QuestionInputType.yesNo,
+        dependsOnYesOf: 'is_arkadas_gorev_verdi_mi',
       ),
       EvalQuestion(
         id: 'is_elestiri_aldim_mi',
@@ -426,6 +430,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
         id: 'okul_zorluk_cozum',
         text: 'Bugün okulda karşılaştığım zorlukları nasıl çözdüm?',
         inputType: QuestionInputType.singleChoice,
+        dependsOnYesOf: 'okul_zorluk_cektim_mi',
         options: [
           'Karşılaştığım zorluğu çözemedim',
           'Kendi başıma çözdüm.',
@@ -451,6 +456,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
         id: 'okul_gorevi_yerine_getirdim_mi',
         text: 'Bugün öğretmenimin benden istediği görevi yerine getirdim mi?',
         inputType: QuestionInputType.yesNo,
+        dependsOnYesOf: 'okul_ogretmen_gorev_verdi_mi',
       ),
       EvalQuestion(
         id: 'okul_elestiri_aldim_mi',
@@ -553,6 +559,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
         id: 'gun_zorluk_cozum',
         text: 'Bugün karşılaştığım zorlukları nasıl çözdüm?',
         inputType: QuestionInputType.singleChoice,
+        dependsOnYesOf: 'gun_zorlandigim_sey',
         options: [
           'Karşılaştığım zorluğu çözemedim',
           'Kendi başıma çözdüm.',
@@ -584,6 +591,7 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
         id: 'gun_ev_gorevini_yaptim_mi',
         text: 'Bugün evdeki görevimi yaptım mı?',
         inputType: QuestionInputType.yesNo,
+        dependsOnYesOf: 'gun_evde_gorev_var_miydi',
       ),
       EvalQuestion(
         id: 'gun_elestiri_aldim_mi',
@@ -679,12 +687,19 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
   }
 
   void _askCurrentQuestion() {
-    if (_currentQuestionIndex < _currentQuestions.length) {
+    while (_currentQuestionIndex < _currentQuestions.length) {
       final q = _currentQuestions[_currentQuestionIndex];
+      if (q.dependsOnYesOf != null) {
+        final prevAns = _answers[q.dependsOnYesOf]?.toString() ?? '';
+        if (prevAns.isEmpty || prevAns.startsWith('Hayır')) {
+          _currentQuestionIndex++;
+          continue;
+        }
+      }
       _addBotMessage(q.text, speak: true);
-    } else {
-      _finishEvaluation();
+      return;
     }
+    _finishEvaluation();
   }
 
   // Kullanıcı Yanıtını İşleme
@@ -693,7 +708,11 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
     final q = _currentQuestions[_currentQuestionIndex];
 
     _addUserMessage(answerText);
-    _answers[q.id] = rawValue ?? answerText;
+    if (_isWaitingForFollowUp) {
+      _answers[q.id] = 'Evet (${rawValue ?? answerText})';
+    } else {
+      _answers[q.id] = rawValue ?? answerText;
+    }
 
     // Özel Evet/Hayır durumunda ek soru (Follow-up) var mı?
     if (!_isWaitingForFollowUp &&
@@ -744,11 +763,27 @@ class _SelfEvaluationScreenState extends State<SelfEvaluationScreen>
 
     await _saveToHistory();
 
+    // Soru kimliklerini (is_yer_adi vb.) öğretmen panelinde okunabilir soru metinlerine dönüştür
+    final readableAnswers = <String, dynamic>{};
+    String? detectedMood;
+    _answers.forEach((key, val) {
+      final matchedQ = _currentQuestions.cast<EvalQuestion?>().firstWhere(
+            (q) => q?.id == key,
+            orElse: () => null,
+          );
+      final questionTitle = matchedQ?.text ?? key;
+      readableAnswers[questionTitle] = val;
+      if (key.contains('duygu') || key.contains('his')) {
+        detectedMood = val?.toString();
+      }
+    });
+
     // Canlı Öğretmen Paneline Gönder (Hatasız & Güvenli)
     TeacherSyncService.instance.sendEvaluationForm(
       formType: _activeFormType?.name ?? 'genel',
-      formTitle: formName,
-      answers: _answers,
+      formTitle: '$formName Gözlem Formu',
+      answers: readableAnswers,
+      mood: detectedMood,
     );
   }
 

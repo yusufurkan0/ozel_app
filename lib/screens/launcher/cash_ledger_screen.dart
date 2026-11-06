@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -395,9 +396,12 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
 
               TextField(
                 controller: nameCtrl,
+                maxLength: 50,
+                inputFormatters: [LengthLimitingTextInputFormatter(50)],
                 decoration: InputDecoration(
                   labelText: 'Ürün Adı',
                   hintText: 'Örn: Ekmek, Süt, Çikolata',
+                  counterText: '',
                   filled: true,
                   fillColor: const Color(0xFFF8FAFC),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -409,10 +413,16 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                 controller: priceCtrl,
                 keyboardType: TextInputType.number,
                 autofocus: true,
+                maxLength: 6,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(6),
+                ],
                 decoration: InputDecoration(
                   labelText: 'Virgülün Solundaki Tutar (TL)',
                   hintText: 'Örn: 24',
                   prefixText: '₺ ',
+                  counterText: '',
                   suffixText: '+ 1 TL Yuvarlama',
                   suffixStyle: const TextStyle(color: Color(0xFF16A34A), fontWeight: FontWeight.bold),
                   filled: true,

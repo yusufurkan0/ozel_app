@@ -25,7 +25,24 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   void _showStudentProfileDialog(BuildContext context, GameProgressService game) {
-    final avatars = ['🐻', '🦁', '🐼', '🐰', '🦊', '⭐', '🚀', '🐬'];
+    const avatars = [
+      'assets/images/avatars/avatar_1.jpg',
+      'assets/images/avatars/avatar_2.jpg',
+      'assets/images/avatars/avatar_3.jpg',
+      'assets/images/avatars/avatar_4.jpg',
+      'assets/images/avatars/avatar_5.jpg',
+      'assets/images/avatars/avatar_6.jpg',
+      'assets/images/avatars/avatar_7.jpg',
+      'assets/images/avatars/avatar_8.jpg',
+      'assets/images/avatars/avatar_9.jpg',
+      'assets/images/avatars/avatar_10.jpg',
+      'assets/images/avatars/avatar_11.jpg',
+      'assets/images/avatars/avatar_12.jpg',
+    ];
+    final currentAvatar = game.avatar.startsWith('assets/')
+        ? game.avatar
+        : 'assets/images/avatars/avatar_1.jpg';
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -34,76 +51,101 @@ class HomeScreen extends StatelessWidget {
           children: [
             Icon(Icons.stars_rounded, color: Colors.amber, size: 28),
             SizedBox(width: 8),
-            Text('Öğrenci Profilim', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text('Kullanıcı Profilim', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(game.avatar, style: const TextStyle(fontSize: 48)),
-            const SizedBox(height: 6),
-            Text(
-              game.childName.isNotEmpty ? game.childName : 'Öğrenci Profilim',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            if (game.childName.isEmpty) ...[
-              const SizedBox(height: 2),
-              const Text(
-                '(İsim tanımlamak için aşağıdaki butona dokunun)',
-                style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Image.asset(
+                  currentAvatar,
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
+                  errorBuilder: (_, _, _) => const Icon(Icons.person, size: 48),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                game.childName.isNotEmpty ? game.childName : 'Kullanıcı Profilim',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              if (game.childName.isEmpty) ...[
+                const SizedBox(height: 2),
+                const Text(
+                  '(İsim tanımlamak için aşağıdaki butona dokunun)',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Text(
+                '⭐ Günlük İlerleme: ${game.todaySteps.length}/${game.dailyGoal} Görev',
+                style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              const Text('Avatarını Değiştir:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: avatars.map((av) => GestureDetector(
+                  onTap: () {
+                    game.saveProfile(game.childName, av);
+                    TeacherSyncService.instance.syncCurrentStudent();
+                    Navigator.pop(ctx);
+                  },
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: currentAvatar == av ? Colors.blue.shade50 : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: currentAvatar == av ? Colors.blue : Colors.black12,
+                        width: currentAvatar == av ? 2.5 : 1,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(
+                        av,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.topCenter,
+                      ),
+                    ),
+                  ),
+                )).toList(),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF1D4ED8),
+                    side: const BorderSide(color: Color(0xFF93C5FD)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  icon: const Icon(Icons.info_rounded, size: 18),
+                  label: const Text('Genel Bilgileri Düzenle', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RegisterScreen(isEditing: true),
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
-            const SizedBox(height: 4),
-            Text(
-              '⭐ Günlük İlerleme: ${game.todaySteps.length}/${game.dailyGoal} Görev',
-              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const Text('Avatarını Değiştir:', style: TextStyle(fontSize: 13, color: Colors.grey)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: avatars.map((av) => GestureDetector(
-                onTap: () {
-                  game.saveProfile(game.childName, av);
-                  TeacherSyncService.instance.syncCurrentStudent();
-                  Navigator.pop(ctx);
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: game.avatar == av ? Colors.blue.shade50 : Colors.grey.shade100,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: game.avatar == av ? Colors.blue : Colors.transparent),
-                  ),
-                  child: Text(av, style: const TextStyle(fontSize: 22)),
-                ),
-              )).toList(),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF1D4ED8),
-                  side: const BorderSide(color: Color(0xFF93C5FD)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                ),
-                icon: const Icon(Icons.info_rounded, size: 18),
-                label: const Text('Genel Bilgileri Düzenle (Acil Durum & Veli)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const RegisterScreen(isEditing: true),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+          ),
         ),
         actions: [
           ElevatedButton(
@@ -262,17 +304,21 @@ class HomeScreen extends StatelessWidget {
                               child: Row(
                                 children: [
                                   Container(
-                                    width: 38,
-                                    height: 38,
+                                    width: 40,
+                                    height: 40,
                                     decoration: BoxDecoration(
                                       color: const Color(0xFFF1F5F9),
                                       shape: BoxShape.circle,
                                       border: Border.all(color: const Color(0xFFE2E8F0), width: 1.2),
                                     ),
-                                    child: Center(
-                                      child: Text(
-                                        game.avatar.isNotEmpty ? game.avatar : '🐻',
-                                        style: const TextStyle(fontSize: 24),
+                                    child: ClipOval(
+                                      child: Image.asset(
+                                        game.avatar.startsWith('assets/')
+                                            ? game.avatar
+                                            : 'assets/images/avatars/avatar_1.jpg',
+                                        fit: BoxFit.cover,
+                                          alignment: Alignment.topCenter,
+                                        errorBuilder: (_, _, _) => const Icon(Icons.person, size: 24),
                                       ),
                                     ),
                                   ),
@@ -283,12 +329,12 @@ class HomeScreen extends StatelessWidget {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          'Özel Yaşam Rehberi',
+                                          '+1 Bağımsız Yaşam Planım',
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontWeight: FontWeight.w800,
-                                            fontSize: 18,
+                                            fontSize: 17,
                                             color: Color(0xFF0F172A),
                                             letterSpacing: -0.3,
                                           ),

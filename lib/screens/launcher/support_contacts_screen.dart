@@ -1,6 +1,7 @@
 import '../../services/device_contacts_service.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -209,9 +210,12 @@ class _SupportContactsScreenState extends State<SupportContactsScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: nameCtrl,
+                  maxLength: 50,
+                  inputFormatters: [LengthLimitingTextInputFormatter(50)],
                   decoration: InputDecoration(
                     labelText: 'Adı Soyadı',
                     hintText: 'Örn: Annem, Ahmet Koç',
+                    counterText: '',
                     prefixIcon: const Icon(Icons.person_outline_rounded),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
@@ -222,9 +226,14 @@ class _SupportContactsScreenState extends State<SupportContactsScreen> {
                 TextField(
                   controller: phoneCtrl,
                   keyboardType: TextInputType.phone,
+                  maxLength: 11,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(11),
+                  ],
                   decoration: InputDecoration(
-                    labelText: 'Telefon Numarası',
-                    hintText: '05xx xxx xx xx',
+                    labelText: 'Telefon Numarası (En Fazla 11 Hane)',
+                    hintText: '05xxxxxxxxx',
                     prefixIcon: const Icon(Icons.phone_outlined),
                     filled: true,
                     fillColor: const Color(0xFFF8FAFC),
@@ -296,28 +305,34 @@ class _SupportContactsScreenState extends State<SupportContactsScreen> {
               ),
               onPressed: () async {
                 final name = nameCtrl.text.trim();
-                final phone = phoneCtrl.text.trim();
-                if (name.isNotEmpty && phone.isNotEmpty) {
-                  setState(() {
-                    _contacts.add({
-                      'name': name,
-                      'role': selectedRole,
-                      'phone': phone,
-                      'avatar': selectedRole == 'İş Koçu' ? '💼' : (selectedRole == 'Aile' ? '👨‍👩‍👧' : '🤝'),
-                      'isJobCoach': selectedRole == 'İş Koçu',
-                    });
-                  });
-                  await _saveContacts();
-                  if (saveToDeviceContacts) {
-                    await DeviceContactsService.saveContactToDevice(
-                      name: name,
-                      phone: phone,
-                      role: selectedRole,
-                    );
-                  }
-                  _speak('$name rehbere eklendi.');
-                  if (ctx.mounted) Navigator.pop(ctx);
+                final phone = phoneCtrl.text.trim().replaceAll(RegExp(r'\D'), '');
+                if (name.isEmpty || phone.isEmpty) {
+                  _showSnack('Lütfen ad soyad ve telefon numarası giriniz.');
+                  return;
                 }
+                if (phone.length < 10 || phone.length > 11) {
+                  _showSnack('Telefon numarası 10 veya 11 haneli olmalıdır.');
+                  return;
+                }
+                setState(() {
+                  _contacts.add({
+                    'name': name,
+                    'role': selectedRole,
+                    'phone': phone,
+                    'avatar': selectedRole == 'İş Koçu' ? '💼' : (selectedRole == 'Aile' ? '👨‍👩‍👧' : '🤝'),
+                    'isJobCoach': selectedRole == 'İş Koçu',
+                  });
+                });
+                await _saveContacts();
+                if (saveToDeviceContacts) {
+                  await DeviceContactsService.saveContactToDevice(
+                    name: name,
+                    phone: phone,
+                    role: selectedRole,
+                  );
+                }
+                _speak('$name rehbere eklendi.');
+                if (ctx.mounted) Navigator.pop(ctx);
               },
               child: const Text('Kaydet'),
             ),

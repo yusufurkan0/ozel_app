@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../data/lezzet_plus_recipes.dart';
 import '../../models/kitchen_recipe.dart';
+import '../../services/teacher_sync_service.dart';
 import '../../theme/app_theme.dart';
 import 'kitchen_recipe_detail_screen.dart';
 
@@ -58,6 +59,89 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen>
     _tabCtrl = TabController(length: 2, vsync: this);
     _recipes = LezzetPlusRecipes.getRecipes();
     _initTts();
+    _syncRemoteRecipes();
+  }
+
+  Future<void> _syncRemoteRecipes() async {
+    try {
+      final remoteList = await TeacherSyncService.instance.fetchRemoteRecipes();
+      if (remoteList.isEmpty || !mounted) return;
+
+      final baseRecipes = LezzetPlusRecipes.getRecipes();
+      final unpublishedIds = <String>{};
+      final customRecipes = <KitchenRecipe>[];
+
+      for (final r in remoteList) {
+        final id = (r['id'] ?? '').toString();
+        if (id.isEmpty) continue;
+        if (r['isPublishedToApp'] == false) {
+          unpublishedIds.add(id);
+          continue;
+        }
+        final existsInBase = baseRecipes.any((b) => b.id == id);
+        if (!existsInBase) {
+          final ingList = (r['ingredients'] as List? ?? []).asMap().entries.map((e) {
+            return RecipeCheckItem(
+              id: '${id}_ing_${e.key}',
+              name: e.value.toString(),
+              icon: Icons.shopping_basket_rounded,
+            );
+          }).toList();
+
+          final stepList = (r['steps'] as List? ?? []).asMap().entries.map((e) {
+            final val = e.value;
+            if (val is Map) {
+              final mins = int.tryParse((val['timerMinutes'] ?? '0').toString()) ?? 0;
+              final stepImg = (val['imagePath'] ?? val['imageUrl'] ?? '').toString().trim();
+              final stepTitle = (val['title'] ?? '').toString().trim();
+              final stepInst = (val['instruction'] ?? '').toString().trim();
+              final fullInstruction = stepTitle.isNotEmpty && stepInst.isNotEmpty && stepTitle != stepInst
+                  ? '$stepTitle: $stepInst'
+                  : (stepInst.isNotEmpty ? stepInst : stepTitle);
+              return RecipeStepItem(
+                stepNumber: e.key + 1,
+                instruction: fullInstruction,
+                imagePath: stepImg.isNotEmpty ? stepImg : null,
+                timerSeconds: mins > 0 ? mins * 60 : null,
+                timerLabel: mins > 0 ? '$mins Dakika' : null,
+              );
+            }
+            return RecipeStepItem(
+              stepNumber: e.key + 1,
+              instruction: val.toString(),
+            );
+          }).toList();
+
+          final rawCover = (r['coverImagePath'] ?? r['imageUrl'] ?? '').toString().trim();
+
+          customRecipes.add(
+            KitchenRecipe(
+              id: id,
+              title: (r['title'] ?? 'Yeni Tarif').toString(),
+              category: (r['category'] ?? 'Çorbalar').toString(),
+              subtitle: (r['description'] ?? r['subtitle'] ?? 'Öğretmen Paneli Tarifi').toString(),
+              portions: (r['servings'] ?? r['portions'] ?? '4 Kişilik').toString(),
+              prepTime: (r['prepTime'] ?? '20 Dakika').toString(),
+              cookTime: (r['cookTime'] ?? '20 Dakika').toString(),
+              difficulty: (r['difficulty'] ?? 'Kolay').toString(),
+              coverImagePath: rawCover.isNotEmpty ? rawCover : null,
+              ingredients: ingList,
+              tools: const [],
+              steps: stepList,
+            ),
+          );
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _recipes = [
+            ...customRecipes,
+            ...baseRecipes.where((b) => !unpublishedIds.contains(b.id)),
+          ];
+        });
+      }
+    } catch (_) {}
   }
 
   void _initTts() async {
@@ -295,7 +379,7 @@ class _KitchenSafetyScreenState extends State<KitchenSafetyScreen>
                                 child: recipe.coverImagePath != null
                                     ? ClipRRect(
                                         borderRadius: BorderRadius.circular(16),
-                                        child: Image.asset(
+                                        child: KitchenRecipe.buildImage(
                                           recipe.coverImagePath!,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, _, _) =>

@@ -146,7 +146,7 @@ class _KitchenRecipeDetailScreenState extends State<KitchenRecipeDetailScreen>
                   border: Border.all(color: Colors.grey.shade200),
                 ),
                 child: item.imagePath != null
-                    ? Image.asset(
+                    ? KitchenRecipe.buildImage(
                         item.imagePath!,
                         fit: BoxFit.contain,
                         errorBuilder: (_, _, _) => Icon(item.icon, color: themeColor, size: 72),
@@ -220,7 +220,7 @@ class _KitchenRecipeDetailScreenState extends State<KitchenRecipeDetailScreen>
                 fit: StackFit.expand,
                 children: [
                   if (recipe.coverImagePath != null)
-                    Image.asset(
+                    KitchenRecipe.buildImage(
                       recipe.coverImagePath!,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) => const SizedBox.shrink(),

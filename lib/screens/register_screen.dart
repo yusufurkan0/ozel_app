@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -11,12 +11,15 @@ import '../services/teacher_sync_service.dart';
 import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'parent_dashboard_screen.dart';
-
 import 'launcher/support_contacts_screen.dart';
 
-/// 📝 Genel Bilgiler & Kayıt Ekranı (Öğrenci, Veli & Acil Durum SOS)
-/// Öğrenci kaydında tam çocuk & SOS profilini alır. İsteğe bağlı tek seferde Veli hesabı da açar.
-/// Düzenleme modunda (isEditing: true) ise "Genel Bilgiler" olarak açılıp kayıtlı tüm bilgileri günceller.
+/// 📝 Genel Bilgiler & Kayıt Ekranı (+1 Bağımsız Yaşam Planım)
+/// Sıralama:
+/// 1. Kullanıcı Bilgileri
+/// 2. Destek Kişilerim
+/// 3. Kişisel Hassasiyetlerim
+/// 4. Acil Durum (SOS)
+/// 5. Sağlık Bilgim
 class RegisterScreen extends StatefulWidget {
   final UserRole initialRole;
   final bool isEditing;
@@ -41,52 +44,128 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _passwordCtrl = TextEditingController();
   final TextEditingController _studentUsernameCtrl = TextEditingController();
 
-  // Çocuğun Bilgileri
+  // 1. KULLANICI BİLGİLERİ
   final TextEditingController _childNameController = TextEditingController();
-  final TextEditingController _ageController = TextEditingController();
-
-  // Ebeveyn & Acil Durum (SOS)
-  final TextEditingController _parentNameController = TextEditingController();
-  final TextEditingController _parentPhoneController = TextEditingController();
-  final TextEditingController _altPhoneController = TextEditingController();
+  final TextEditingController _birthDateController = TextEditingController(); // gg/aa/yyyy
   final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _medicalNotesController = TextEditingController();
+  String _selectedAvatar = 'assets/images/avatars/avatar_1.jpg';
+  String _selectedDiagnosis = 'Down Sendromu';
 
-  // Destek Kişileri (İş Koçu & Aile)
-  final List<Map<String, dynamic>> _supportContacts = [];
-  final TextEditingController _newContactNameCtrl = TextEditingController();
-  final TextEditingController _newContactPhoneCtrl = TextEditingController();
-  String _selectedContactRole = 'İş Koçu'; // 'İş Koçu', 'Aile', 'Öğretmen', 'Diğer'
+  // Alfabetik sırada tanı listesi
+  static const List<String> _diagnosisOptions = [
+    'Cerebral Palsi',
+    'Çoklu engel',
+    'DEHB',
+    'Diğer',
+    'Diğer nörogelişimsel farklılıklar',
+    'Diğer zihinsel engel',
+    'Down Sendromu',
+    'Görme Engeli',
+    'İşitme Engeli',
+    'Otizm',
+    'Özgül Öğrenme Güçlüğü',
+  ];
 
-  // Öğrenci kaydederken tek seferde Veli hesabı da açma seçeneği
-  bool _createDualParentAccount = false;
-  final TextEditingController _dualParentUsernameCtrl = TextEditingController();
-  final TextEditingController _dualParentPasswordCtrl = TextEditingController();
+  // 2. DESTEK KİŞİLERİM
+  static const List<String> _familyRelationOptions = [
+    'Anne',
+    'Baba',
+    'Kardeş',
+    'Abla',
+    'Abi',
+    'Diğer Akraba',
+  ];
 
-  String _selectedAvatar = '🐻';
-  String _selectedDiagnosis = 'Otizm Spektrumu 🧩';
+  // Aileden 1. Destek Kişisi
+  final TextEditingController _family1NameCtrl = TextEditingController();
+  final TextEditingController _family1PhoneCtrl = TextEditingController();
+  String _family1Relation = 'Anne';
+  bool _family1IsEmergency = true;
+
+  // Aileden 2. Destek Kişisi
+  final TextEditingController _family2NameCtrl = TextEditingController();
+  final TextEditingController _family2PhoneCtrl = TextEditingController();
+  String _family2Relation = 'Baba';
+  bool _family2IsEmergency = false;
+
+  // İş Koçu
+  final TextEditingController _jobCoachNameCtrl = TextEditingController();
+  final TextEditingController _jobCoachPhoneCtrl = TextEditingController();
+  bool _jobCoachIsEmergency = false;
+
+  // Gölge Öğretmen / Bakıcı vb.
+  final TextEditingController _shadowTeacherNameCtrl = TextEditingController();
+  final TextEditingController _shadowTeacherPhoneCtrl = TextEditingController();
+  bool _shadowTeacherIsEmergency = false;
+
+  // Ek destek kişileri (SupportContactsScreen ile senkron)
+  final List<Map<String, dynamic>> _extraSupportContacts = [];
+
+  // 3. KİŞİSEL HASSASİYETLERİM (Çoklu Seçim + Not)
+  static const List<String> _sensitivityOptions = [
+    'Ani veya yüksek sesten rahatsız olurum',
+    'Işık hassasiyetim var',
+    'Bazı hayvanlardan korkarım',
+    'Alerjim var',
+    'Diyabetim var',
+    'Ses kesen kulaklık takmam gerek',
+    'Beni sakinleştirecek bir eşyayı elimde tutarım',
+    'Uzun süre ayakta duramam',
+    'Bir yere inip çıkarken yardıma ihtiyacım var',
+    'Duyamıyorum',
+    'Konuşamıyorum',
+    'Sürekli ilaç kullandığım bir hastalığım var',
+    'Kaybolma riskim var',
+    'Unutkanlığım var',
+    'Diğer',
+  ];
+  final Set<String> _selectedSensitivities = {};
+  final TextEditingController _sensitivityNotesCtrl = TextEditingController();
+
+  // 4. ACİL DURUM (SOS) - Destek Kişilerinden Seçilen 1. ve 2. Kişi
+  final TextEditingController _sos1NameCtrl = TextEditingController();
+  final TextEditingController _sos1PhoneCtrl = TextEditingController();
+  final TextEditingController _sos2NameCtrl = TextEditingController();
+  final TextEditingController _sos2PhoneCtrl = TextEditingController();
+
+  // Afet ve Acil Durum Kişi Kartı Alanları (İsteğe Bağlı, Kaldığı Yerden Devam Eder)
+  final TextEditingController _disasterCardTcCtrl = TextEditingController();
+  final TextEditingController _disasterCardBloodTypeCtrl = TextEditingController();
+  final TextEditingController _disasterCardMeetingPlaceCtrl = TextEditingController();
+  final TextEditingController _disasterCardOutCityContactCtrl = TextEditingController();
+  final TextEditingController _disasterCardEquipmentCtrl = TextEditingController();
+  final TextEditingController _disasterCardCommunicationWayCtrl = TextEditingController();
+  final TextEditingController _disasterCardCalmingMethodsCtrl = TextEditingController();
+
+  // 5. SAĞLIK BİLGİM
+  final TextEditingController _medicationsCtrl = TextEditingController();
+  final TextEditingController _chronicDiseasesCtrl = TextEditingController();
+  final TextEditingController _healthExtraNotesCtrl = TextEditingController();
+
+  // Veli Kaydı
+  final TextEditingController _parentNameController = TextEditingController();
+
   bool _obscurePassword = true;
-  bool _obscureDualPassword = true;
   bool _isLoading = false;
   String _errorMessage = '';
 
   static const List<String> _avatars = [
-    '🐻', '🐰', '🦁', '🐼', '🦊', '🐱',
-    '🐶', '🐨', '🦄', '🚀', '🌟', '🐬',
+    'assets/images/avatars/avatar_1.jpg',
+    'assets/images/avatars/avatar_2.jpg',
+    'assets/images/avatars/avatar_3.jpg',
+    'assets/images/avatars/avatar_4.jpg',
+    'assets/images/avatars/avatar_5.jpg',
+    'assets/images/avatars/avatar_6.jpg',
+    'assets/images/avatars/avatar_7.jpg',
+    'assets/images/avatars/avatar_8.jpg',
+    'assets/images/avatars/avatar_9.jpg',
+    'assets/images/avatars/avatar_10.jpg',
+    'assets/images/avatars/avatar_11.jpg',
+    'assets/images/avatars/avatar_12.jpg',
   ];
 
   static const List<String> _parentAvatars = [
     '👩', '👨', '🧑‍🏫', '🌟', '🐻', '🦁',
-  ];
-
-  static const List<String> _diagnosisOptions = [
-    'Otizm Spektrumu 🧩',
-    'Dil ve Konuşma Güçlüğü 🗣️',
-    'Down Sendromu 💛',
-    'Gelişimsel Gecikme 🌱',
-    'Dikkat & Hiperaktivite ⚡',
-    'İşitme Güçlüğü 🦻',
-    'Diğer Özel Gereksinim 🌟',
   ];
 
   @override
@@ -96,9 +175,120 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (_selectedRole == UserRole.parent) {
       _selectedAvatar = '👩';
     }
-    if (widget.isEditing) {
-      _loadExistingData();
+
+    // Destek kişisi alanları değiştikçe SOS 1. ve 2. kişiyi otomatik senkronize et
+    _family1NameCtrl.addListener(_syncEmergencyContactsFromSupport);
+    _family1PhoneCtrl.addListener(_syncEmergencyContactsFromSupport);
+    _family2NameCtrl.addListener(_syncEmergencyContactsFromSupport);
+    _family2PhoneCtrl.addListener(_syncEmergencyContactsFromSupport);
+    _jobCoachNameCtrl.addListener(_syncEmergencyContactsFromSupport);
+    _jobCoachPhoneCtrl.addListener(_syncEmergencyContactsFromSupport);
+    _shadowTeacherNameCtrl.addListener(_syncEmergencyContactsFromSupport);
+    _shadowTeacherPhoneCtrl.addListener(_syncEmergencyContactsFromSupport);
+
+    _loadExistingData();
+  }
+
+  /// Destek Kişilerim bölümünde "Acil Durum Kişisi olarak seç" işaretlenenleri
+  /// 4. Acil Durum (SOS) bölümündeki 1. ve 2. Kişi alanlarına otomatik yansıtır.
+  void _syncEmergencyContactsFromSupport() {
+    final selectedCandidates = <Map<String, String>>[];
+
+    if (_family1IsEmergency &&
+        (_family1NameCtrl.text.trim().isNotEmpty || _family1PhoneCtrl.text.trim().isNotEmpty)) {
+      selectedCandidates.add({
+        'name': '${_family1NameCtrl.text.trim()} ($_family1Relation)'.trim(),
+        'phone': _family1PhoneCtrl.text.trim(),
+      });
     }
+    if (_family2IsEmergency &&
+        (_family2NameCtrl.text.trim().isNotEmpty || _family2PhoneCtrl.text.trim().isNotEmpty)) {
+      selectedCandidates.add({
+        'name': '${_family2NameCtrl.text.trim()} ($_family2Relation)'.trim(),
+        'phone': _family2PhoneCtrl.text.trim(),
+      });
+    }
+    if (_jobCoachIsEmergency &&
+        (_jobCoachNameCtrl.text.trim().isNotEmpty || _jobCoachPhoneCtrl.text.trim().isNotEmpty)) {
+      selectedCandidates.add({
+        'name': '${_jobCoachNameCtrl.text.trim()} (İş Koçu)'.trim(),
+        'phone': _jobCoachPhoneCtrl.text.trim(),
+      });
+    }
+    if (_shadowTeacherIsEmergency &&
+        (_shadowTeacherNameCtrl.text.trim().isNotEmpty || _shadowTeacherPhoneCtrl.text.trim().isNotEmpty)) {
+      selectedCandidates.add({
+        'name': '${_shadowTeacherNameCtrl.text.trim()} (Gölge Öğretmen/Bakıcı)'.trim(),
+        'phone': _shadowTeacherPhoneCtrl.text.trim(),
+      });
+    }
+
+    if (selectedCandidates.isNotEmpty) {
+      _sos1NameCtrl.text = selectedCandidates[0]['name'] ?? '';
+      _sos1PhoneCtrl.text = selectedCandidates[0]['phone'] ?? '';
+    } else {
+      _sos1NameCtrl.text = '';
+      _sos1PhoneCtrl.text = '';
+    }
+
+    if (selectedCandidates.length >= 2) {
+      _sos2NameCtrl.text = selectedCandidates[1]['name'] ?? '';
+      _sos2PhoneCtrl.text = selectedCandidates[1]['phone'] ?? '';
+    } else {
+      _sos2NameCtrl.text = '';
+      _sos2PhoneCtrl.text = '';
+    }
+  }
+
+  /// Mevcut tüm destek kişilerini (4. Acil Durum SOS bölümünde seçim için) döndürür
+  List<Map<String, String>> _getAvailableSupportContactsForSelection() {
+    final list = <Map<String, String>>[];
+    if (_family1NameCtrl.text.trim().isNotEmpty || _family1PhoneCtrl.text.trim().isNotEmpty) {
+      list.add({
+        'key': 'family1',
+        'label': '${_family1NameCtrl.text.trim().isEmpty ? "1. Aile Destek Kişisi" : _family1NameCtrl.text.trim()} ($_family1Relation)',
+        'name': '${_family1NameCtrl.text.trim()} ($_family1Relation)'.trim(),
+        'phone': _family1PhoneCtrl.text.trim(),
+      });
+    }
+    if (_family2NameCtrl.text.trim().isNotEmpty || _family2PhoneCtrl.text.trim().isNotEmpty) {
+      list.add({
+        'key': 'family2',
+        'label': '${_family2NameCtrl.text.trim().isEmpty ? "2. Aile Destek Kişisi" : _family2NameCtrl.text.trim()} ($_family2Relation)',
+        'name': '${_family2NameCtrl.text.trim()} ($_family2Relation)'.trim(),
+        'phone': _family2PhoneCtrl.text.trim(),
+      });
+    }
+    if (_jobCoachNameCtrl.text.trim().isNotEmpty || _jobCoachPhoneCtrl.text.trim().isNotEmpty) {
+      list.add({
+        'key': 'jobCoach',
+        'label': '${_jobCoachNameCtrl.text.trim().isEmpty ? "İş Koçu" : _jobCoachNameCtrl.text.trim()} (İş Koçu)',
+        'name': '${_jobCoachNameCtrl.text.trim()} (İş Koçu)'.trim(),
+        'phone': _jobCoachPhoneCtrl.text.trim(),
+      });
+    }
+    if (_shadowTeacherNameCtrl.text.trim().isNotEmpty || _shadowTeacherPhoneCtrl.text.trim().isNotEmpty) {
+      list.add({
+        'key': 'shadowTeacher',
+        'label': '${_shadowTeacherNameCtrl.text.trim().isEmpty ? "Gölge Öğretmen/Bakıcı" : _shadowTeacherNameCtrl.text.trim()} (Gölge Öğretmen/Bakıcı)',
+        'name': '${_shadowTeacherNameCtrl.text.trim()} (Gölge Öğretmen/Bakıcı)'.trim(),
+        'phone': _shadowTeacherPhoneCtrl.text.trim(),
+      });
+    }
+    for (final extra in _extraSupportContacts) {
+      final n = (extra['name'] ?? '').toString().trim();
+      final p = (extra['phone'] ?? '').toString().trim();
+      final r = (extra['role'] ?? 'Destek').toString().trim();
+      if (n.isNotEmpty || p.isNotEmpty) {
+        list.add({
+          'key': 'extra_$n',
+          'label': '$n ($r)',
+          'name': '$n ($r)',
+          'phone': p,
+        });
+      }
+    }
+    return list;
   }
 
   Future<void> _loadExistingData() async {
@@ -109,41 +299,104 @@ class _RegisterScreenState extends State<RegisterScreen> {
           prefs.getString('sos_child_name') ??
           prefs.getString('user_emergency_name') ??
           '';
-      final ageStr = prefs.getString('sos_child_age') ?? '';
-      final parentName = prefs.getString('sos_parent_name') ?? '';
-      final parentPhone = prefs.getString('sos_parent_phone') ??
-          prefs.getString('user_emergency_phone') ??
+      final birthDate = prefs.getString('user_birth_date') ??
+          prefs.getString('sos_child_age') ??
           '';
-      final altPhone = prefs.getString('sos_alt_phone') ?? '';
       final address = prefs.getString('sos_home_address') ??
           prefs.getString('user_home_address') ??
-          '';
-      final notes = prefs.getString('sos_medical_notes') ??
-          prefs.getString('user_emergency_notes') ??
           '';
       final diagnosis = prefs.getString('child_diagnosis') ?? '';
       final avatar = prefs.getString('avatar') ?? '';
 
       _childNameController.text = childName;
-      _ageController.text = ageStr.replaceAll(RegExp(r'\D'), '');
-      _parentNameController.text = parentName;
-      _parentPhoneController.text = parentPhone;
-      _altPhoneController.text = altPhone;
+      _birthDateController.text = birthDate;
       _addressController.text = address;
-      _medicalNotesController.text = notes;
+
+      // Eski tanı değerlerini yeni alfabetik listeye eşleştir
       if (_diagnosisOptions.contains(diagnosis)) {
         _selectedDiagnosis = diagnosis;
+      } else if (diagnosis.toLowerCase().contains('down')) {
+        _selectedDiagnosis = 'Down Sendromu';
+      } else if (diagnosis.toLowerCase().contains('otizm')) {
+        _selectedDiagnosis = 'Otizm';
+      } else if (diagnosis.toLowerCase().contains('dikkat') || diagnosis.toLowerCase().contains('dehb')) {
+        _selectedDiagnosis = 'DEHB';
+      } else if (diagnosis.toLowerCase().contains('işitme')) {
+        _selectedDiagnosis = 'İşitme Engeli';
       }
+
       if (_avatars.contains(avatar)) {
         _selectedAvatar = avatar;
       }
 
+      // 2. Destek Kişilerim verilerini yükle
+      _family1NameCtrl.text = prefs.getString('support_family1_name') ??
+          prefs.getString('sos_parent_name') ??
+          '';
+      _family1PhoneCtrl.text = prefs.getString('support_family1_phone') ??
+          prefs.getString('sos_parent_phone') ??
+          prefs.getString('user_emergency_phone') ??
+          '';
+      final rel1 = prefs.getString('support_family1_relation') ?? 'Anne';
+      if (_familyRelationOptions.contains(rel1)) _family1Relation = rel1;
+      _family1IsEmergency = prefs.getBool('support_family1_is_emergency') ?? true;
+
+      _family2NameCtrl.text = prefs.getString('support_family2_name') ?? '';
+      _family2PhoneCtrl.text = prefs.getString('support_family2_phone') ??
+          prefs.getString('sos_alt_phone') ??
+          '';
+      final rel2 = prefs.getString('support_family2_relation') ?? 'Baba';
+      if (_familyRelationOptions.contains(rel2)) _family2Relation = rel2;
+      _family2IsEmergency = prefs.getBool('support_family2_is_emergency') ??
+          (_family2PhoneCtrl.text.trim().isNotEmpty);
+
+      _jobCoachNameCtrl.text = prefs.getString('support_job_coach_name') ?? '';
+      _jobCoachPhoneCtrl.text = prefs.getString('support_job_coach_phone') ?? '';
+      _jobCoachIsEmergency = prefs.getBool('support_job_coach_is_emergency') ?? false;
+
+      _shadowTeacherNameCtrl.text = prefs.getString('support_shadow_teacher_name') ?? '';
+      _shadowTeacherPhoneCtrl.text = prefs.getString('support_shadow_teacher_phone') ?? '';
+      _shadowTeacherIsEmergency = prefs.getBool('support_shadow_teacher_is_emergency') ?? false;
+
+      // 3. Kişisel Hassasiyetlerim
+      final savedSensList = prefs.getStringList('user_sensitivities') ?? [];
+      _selectedSensitivities
+        ..clear()
+        ..addAll(savedSensList);
+      _sensitivityNotesCtrl.text = prefs.getString('user_sensitivity_notes') ??
+          prefs.getString('sos_medical_notes') ??
+          '';
+
+      // 4. Acil Durum (SOS)
+      _sos1NameCtrl.text = prefs.getString('sos_contact1_name') ?? '';
+      _sos1PhoneCtrl.text = prefs.getString('sos_contact1_phone') ?? '';
+      _sos2NameCtrl.text = prefs.getString('sos_contact2_name') ?? '';
+      _sos2PhoneCtrl.text = prefs.getString('sos_contact2_phone') ?? '';
+      if (_sos1NameCtrl.text.isEmpty && _sos1PhoneCtrl.text.isEmpty) {
+        _syncEmergencyContactsFromSupport();
+      }
+
+      // Afet ve Acil Durum Kişi Kartı (Kaldığı yerden devam eden veriler)
+      _disasterCardTcCtrl.text = prefs.getString('disaster_card_tc') ?? '';
+      _disasterCardBloodTypeCtrl.text = prefs.getString('disaster_card_blood') ?? '';
+      _disasterCardMeetingPlaceCtrl.text = prefs.getString('disaster_card_meeting_place') ?? '';
+      _disasterCardOutCityContactCtrl.text = prefs.getString('disaster_card_out_city_contact') ?? '';
+      _disasterCardEquipmentCtrl.text = prefs.getString('disaster_card_equipment') ?? '';
+      _disasterCardCommunicationWayCtrl.text = prefs.getString('disaster_card_comm_way') ?? '';
+      _disasterCardCalmingMethodsCtrl.text = prefs.getString('disaster_card_calming') ?? '';
+
+      // 5. Sağlık Bilgim
+      _medicationsCtrl.text = prefs.getString('health_medications') ?? '';
+      _chronicDiseasesCtrl.text = prefs.getString('health_chronic_diseases') ?? '';
+      _healthExtraNotesCtrl.text = prefs.getString('health_extra_notes') ?? '';
+
+      // Ek rehber kişileri
       final savedContactsStr = prefs.getString('user_support_contacts');
       if (savedContactsStr != null && savedContactsStr.isNotEmpty) {
         final decoded = jsonDecode(savedContactsStr) as List;
-        _supportContacts.clear();
+        _extraSupportContacts.clear();
         for (final item in decoded) {
-          _supportContacts.add(Map<String, dynamic>.from(item as Map));
+          _extraSupportContacts.add(Map<String, dynamic>.from(item as Map));
         }
       }
     } catch (_) {}
@@ -156,73 +409,411 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordCtrl.dispose();
     _studentUsernameCtrl.dispose();
     _childNameController.dispose();
-    _ageController.dispose();
-    _parentNameController.dispose();
-    _parentPhoneController.dispose();
-    _altPhoneController.dispose();
+    _birthDateController.dispose();
     _addressController.dispose();
-    _medicalNotesController.dispose();
-    _dualParentUsernameCtrl.dispose();
-    _dualParentPasswordCtrl.dispose();
-    _newContactNameCtrl.dispose();
-    _newContactPhoneCtrl.dispose();
+    _family1NameCtrl.dispose();
+    _family1PhoneCtrl.dispose();
+    _family2NameCtrl.dispose();
+    _family2PhoneCtrl.dispose();
+    _jobCoachNameCtrl.dispose();
+    _jobCoachPhoneCtrl.dispose();
+    _shadowTeacherNameCtrl.dispose();
+    _shadowTeacherPhoneCtrl.dispose();
+    _sensitivityNotesCtrl.dispose();
+    _sos1NameCtrl.dispose();
+    _sos1PhoneCtrl.dispose();
+    _sos2NameCtrl.dispose();
+    _sos2PhoneCtrl.dispose();
+    _disasterCardTcCtrl.dispose();
+    _disasterCardBloodTypeCtrl.dispose();
+    _disasterCardMeetingPlaceCtrl.dispose();
+    _disasterCardOutCityContactCtrl.dispose();
+    _disasterCardEquipmentCtrl.dispose();
+    _disasterCardCommunicationWayCtrl.dispose();
+    _disasterCardCalmingMethodsCtrl.dispose();
+    _medicationsCtrl.dispose();
+    _chronicDiseasesCtrl.dispose();
+    _healthExtraNotesCtrl.dispose();
+    _parentNameController.dispose();
     super.dispose();
   }
 
-  void _addSupportContact() {
-    final name = _newContactNameCtrl.text.trim();
-    final phone = _newContactPhoneCtrl.text.trim();
-
-    if (name.isEmpty) {
-      _showError('Lütfen destek kişisinin adını yazınız.');
-      return;
+  /// Doğum Tarihi Seçici (gg/aa/yyyy)
+  Future<void> _pickBirthDate() async {
+    DateTime initial = DateTime(2012, 1, 1);
+    final parts = _birthDateController.text.trim().split('/');
+    if (parts.length == 3) {
+      final d = int.tryParse(parts[0]);
+      final m = int.tryParse(parts[1]);
+      final y = int.tryParse(parts[2]);
+      if (d != null && m != null && y != null && y > 1940 && y <= DateTime.now().year) {
+        initial = DateTime(y, m.clamp(1, 12), d.clamp(1, 31));
+      }
     }
-    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
-    if (cleanPhone.length < 10) {
-      _showError('Lütfen geçerli bir telefon numarası giriniz (en az 10-11 hane).');
-      return;
-    }
 
-    final isJobCoach = _selectedContactRole == 'İş Koçu';
-    final avatar = isJobCoach
-        ? '💼'
-        : (_selectedContactRole == 'Öğretmen' ? '🧑‍🏫' : '👨‍👩‍👧');
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1950),
+      lastDate: DateTime.now(),
+      helpText: 'DOĞUM TARİHİNİ SEÇİN (GG/AA/YYYY)',
+      cancelText: 'İptal',
+      confirmText: 'Seç',
+    );
 
-    setState(() {
-      _supportContacts.add({
-        'name': name,
-        'role': _selectedContactRole,
-        'phone': phone,
-        'avatar': avatar,
-        'isJobCoach': isJobCoach,
+    if (picked != null) {
+      final formatted =
+          '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+      setState(() {
+        _birthDateController.text = formatted;
       });
-      _newContactNameCtrl.clear();
-      _newContactPhoneCtrl.clear();
-      _errorMessage = '';
-    });
+    }
+  }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$name ($_selectedContactRole) destek kişilerinize eklendi! ✨'),
-        backgroundColor: AppColors.positiveGreen,
-        duration: const Duration(seconds: 2),
-      ),
+  /// gg/aa/yyyy metninden yaş hesaplayıcı
+  int _calculateAgeFromBirthDate(String text) {
+    final parts = text.trim().split('/');
+    if (parts.length == 3) {
+      final y = int.tryParse(parts[2]);
+      if (y != null && y > 1940 && y <= DateTime.now().year) {
+        return (DateTime.now().year - y).clamp(1, 99);
+      }
+    }
+    return int.tryParse(text.replaceAll(RegExp(r'\D'), '')) ?? 14;
+  }
+
+  /// Afet ve Acil Durum Kişi Kartı anlık otomatik kayıt (Kullanıcı istediği aşamada çıkabilir, veriler korunur)
+  Future<void> _saveDisasterCardDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('disaster_card_tc', _disasterCardTcCtrl.text.trim());
+      await prefs.setString('disaster_card_blood', _disasterCardBloodTypeCtrl.text.trim());
+      await prefs.setString('disaster_card_meeting_place', _disasterCardMeetingPlaceCtrl.text.trim());
+      await prefs.setString('disaster_card_out_city_contact', _disasterCardOutCityContactCtrl.text.trim());
+      await prefs.setString('disaster_card_equipment', _disasterCardEquipmentCtrl.text.trim());
+      await prefs.setString('disaster_card_comm_way', _disasterCardCommunicationWayCtrl.text.trim());
+      await prefs.setString('disaster_card_calming', _disasterCardCalmingMethodsCtrl.text.trim());
+    } catch (_) {}
+  }
+
+  int _getDisasterCardFilledCount() {
+    int count = 0;
+    if (_disasterCardTcCtrl.text.trim().isNotEmpty) count++;
+    if (_disasterCardBloodTypeCtrl.text.trim().isNotEmpty) count++;
+    if (_disasterCardMeetingPlaceCtrl.text.trim().isNotEmpty) count++;
+    if (_disasterCardOutCityContactCtrl.text.trim().isNotEmpty) count++;
+    if (_disasterCardEquipmentCtrl.text.trim().isNotEmpty) count++;
+    if (_disasterCardCommunicationWayCtrl.text.trim().isNotEmpty) count++;
+    if (_disasterCardCalmingMethodsCtrl.text.trim().isNotEmpty) count++;
+    return count;
+  }
+
+  /// Afet ve Acil Durum Kişi Kartı Doldurma ve Görüntüleme Modalı
+  void _openDisasterPersonCardDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            void onFieldChange(String _) {
+              _saveDisasterCardDraft();
+              setModalState(() {});
+              setState(() {});
+            }
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.88,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                children: [
+                  // Üst Bar
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 16, 14),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF991B1B),
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.assignment_ind_rounded, color: Colors.white, size: 28),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Afet ve Acil Durum Kişi Kartı',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'İstediğiniz aşamada çıkabilirsiniz; yazdıklarınız otomatik kaydedilir.',
+                                style: TextStyle(color: Color(0xFFFECACA), fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Colors.white),
+                          tooltip: 'Kaydet ve Çık',
+                          onPressed: () {
+                            _saveDisasterCardDraft();
+                            Navigator.pop(ctx);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.all(20),
+                      children: [
+                        // Canlı Önizleme Kartı (Kayıtlı Bilgileri Görebilme)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF1F2),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFFDA4AF), width: 1.5),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.visibility_rounded, color: Color(0xFFBE123C), size: 20),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Kişi Kartı Canlı Özeti',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF881337)),
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFBE123C),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      '${_getDisasterCardFilledCount()}/7 Alan Dolu',
+                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 16),
+                              Text('👤 Ad Soyad: ${_childNameController.text.isEmpty ? "Belirtilmedi" : _childNameController.text}',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                              Text('🎂 Doğum Tarihi: ${_birthDateController.text.isEmpty ? "Belirtilmedi" : _birthDateController.text} | Tanı: $_selectedDiagnosis',
+                                  style: const TextStyle(fontSize: 12)),
+                              Text('🩸 Kan Grubu: ${_disasterCardBloodTypeCtrl.text.isEmpty ? "Belirtilmedi" : _disasterCardBloodTypeCtrl.text} | TC: ${_disasterCardTcCtrl.text.isEmpty ? "-" : _disasterCardTcCtrl.text}',
+                                  style: const TextStyle(fontSize: 12)),
+                              Text('📞 Acil 1. Kişi: ${_sos1NameCtrl.text.isEmpty ? "Seçilmedi" : "${_sos1NameCtrl.text} (${_sos1PhoneCtrl.text})"}',
+                                  style: const TextStyle(fontSize: 12)),
+                              if (_selectedSensitivities.isNotEmpty)
+                                Text('⚠️ Hassasiyetler: ${_selectedSensitivities.join(", ")}',
+                                    style: const TextStyle(fontSize: 11, color: Color(0xFF9F1239))),
+                            ],
+                          ),
+                        ),
+
+                        _buildDisasterField(
+                          controller: _disasterCardTcCtrl,
+                          label: '1. T.C. Kimlik Numarası (11 Hane - İsteğe Bağlı)',
+                          hint: '11 haneli T.C. Kimlik No',
+                          icon: Icons.badge_rounded,
+                          keyboardType: TextInputType.number,
+                          maxLength: 11,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(11),
+                          ],
+                          onChanged: onFieldChange,
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildDisasterField(
+                          controller: _disasterCardBloodTypeCtrl,
+                          label: '2. Kan Grubu',
+                          hint: 'Örn: A Rh(+), 0 Rh(-)',
+                          icon: Icons.bloodtype_rounded,
+                          maxLength: 15,
+                          inputFormatters: [LengthLimitingTextInputFormatter(15)],
+                          onChanged: onFieldChange,
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildDisasterField(
+                          controller: _disasterCardMeetingPlaceCtrl,
+                          label: '3. Afet Toplanma Alanı / Buluşma Noktası',
+                          hint: 'Örn: Mahalle Parkı 2 Nolu Afet Toplanma Alanı',
+                          icon: Icons.location_on_rounded,
+                          maxLength: 150,
+                          inputFormatters: [LengthLimitingTextInputFormatter(150)],
+                          onChanged: onFieldChange,
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildDisasterField(
+                          controller: _disasterCardOutCityContactCtrl,
+                          label: '4. Şehir Dışı Acil İletişim Kişisi & Telefonu',
+                          hint: 'Örn: Mehmet Amca (Ankara) - 0532 XXX XX XX',
+                          icon: Icons.contact_phone_rounded,
+                          maxLength: 100,
+                          inputFormatters: [LengthLimitingTextInputFormatter(100)],
+                          onChanged: onFieldChange,
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildDisasterField(
+                          controller: _disasterCardEquipmentCtrl,
+                          label: '5. Kullandığı Destekleyici Cihaz / Ekipmanlar',
+                          hint: 'Örn: İşitme cihazı, gözlük, gürültü önleyici kulaklık',
+                          icon: Icons.hearing_rounded,
+                          maxLength: 150,
+                          inputFormatters: [LengthLimitingTextInputFormatter(150)],
+                          onChanged: onFieldChange,
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildDisasterField(
+                          controller: _disasterCardCommunicationWayCtrl,
+                          label: '6. İletişim Kurma Biçimi',
+                          hint: 'Örn: Kısa ve net cümlelerle konuşun, görsel kart gösterin',
+                          icon: Icons.record_voice_over_rounded,
+                          maxLength: 150,
+                          inputFormatters: [LengthLimitingTextInputFormatter(150)],
+                          onChanged: onFieldChange,
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildDisasterField(
+                          controller: _disasterCardCalmingMethodsCtrl,
+                          label: '7. Kriz / Panik Anında Sakinleştirme Yöntemleri',
+                          hint: 'Örn: Sevdiği müziği dinletin, kalabalıktan uzaklaştırın',
+                          icon: Icons.favorite_rounded,
+                          maxLength: 150,
+                          inputFormatters: [LengthLimitingTextInputFormatter(150)],
+                          onChanged: onFieldChange,
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+
+                  // Alt Butonlar
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 13),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            icon: const Icon(Icons.pause_circle_outline_rounded),
+                            label: const Text('Şimdilik Çık (Kaldığım Yer Kaydedildi)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            onPressed: () {
+                              _saveDisasterCardDraft();
+                              Navigator.pop(ctx);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF16A34A),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          ),
+                          icon: const Icon(Icons.check_circle_rounded),
+                          label: const Text('Kaydet', style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: () {
+                            final tcText = _disasterCardTcCtrl.text.trim();
+                            if (tcText.isNotEmpty && tcText.length != 11) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('T.C. Kimlik Numarası girilecekse 11 haneli olmalıdır.'),
+                                  backgroundColor: AppColors.accentRed,
+                                ),
+                              );
+                              return;
+                            }
+                            _saveDisasterCardDraft();
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Afet ve Acil Durum Kişi Kartı bilgileriniz kaydedildi! ✅'),
+                                backgroundColor: AppColors.positiveGreen,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
-  void _removeSupportContact(int index) {
-    if (index >= 0 && index < _supportContacts.length) {
-      final name = _supportContacts[index]['name'] ?? 'Kişi';
-      setState(() {
-        _supportContacts.removeAt(index);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$name destek kişileri listesinden çıkarıldı.'),
-          duration: const Duration(seconds: 2),
+  Widget _buildDisasterField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    required ValueChanged<String> onChanged,
+    TextInputType keyboardType = TextInputType.text,
+    int? maxLength,
+    List<TextInputFormatter>? inputFormatters,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        const SizedBox(height: 5),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFCBD5E1)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            maxLength: maxLength,
+            inputFormatters: inputFormatters,
+            onChanged: onChanged,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              icon: Icon(icon, color: const Color(0xFFBE123C), size: 20),
+              hintText: hint,
+              hintStyle: const TextStyle(fontSize: 12, color: Colors.grey),
+              border: InputBorder.none,
+              counterText: maxLength == 11 ? null : '',
+            ),
+          ),
         ),
-      );
-    }
+      ],
+    );
   }
 
   void _showError(String msg) {
@@ -236,13 +827,185 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
+  /// Tüm yeni alanları SharedPreferences ve Destek Kişileri listesine kaydeder
+  Future<void> _persistAllProfileFields() async {
+    final prefs = await SharedPreferences.getInstance();
+    final childName = _childNameController.text.trim();
+    final birthDate = _birthDateController.text.trim();
+    final address = _addressController.text.trim();
+
+    _syncEmergencyContactsFromSupport();
+
+    final primarySosName = _sos1NameCtrl.text.trim().isNotEmpty
+        ? _sos1NameCtrl.text.trim()
+        : (_family1NameCtrl.text.trim().isNotEmpty ? _family1NameCtrl.text.trim() : 'Destek Kişisi');
+    final primarySosPhone = _sos1PhoneCtrl.text.trim().isNotEmpty
+        ? _sos1PhoneCtrl.text.trim()
+        : _family1PhoneCtrl.text.trim();
+    final secondarySosPhone = _sos2PhoneCtrl.text.trim().isNotEmpty
+        ? _sos2PhoneCtrl.text.trim()
+        : _family2PhoneCtrl.text.trim();
+
+    // Kişisel hassasiyetler + sağlık bilgisi birleşik özet (SOS ekranı ve öğretmen paneli için)
+    final summaryParts = <String>[
+      'Tanı: $_selectedDiagnosis',
+      if (_selectedSensitivities.isNotEmpty) 'Hassasiyetler: ${_selectedSensitivities.join(", ")}',
+      if (_sensitivityNotesCtrl.text.trim().isNotEmpty) 'Hassasiyet Notu: ${_sensitivityNotesCtrl.text.trim()}',
+      if (_medicationsCtrl.text.trim().isNotEmpty) 'Sürekli İlaçlar: ${_medicationsCtrl.text.trim()}',
+      if (_chronicDiseasesCtrl.text.trim().isNotEmpty) 'Kronik Hastalıklar: ${_chronicDiseasesCtrl.text.trim()}',
+      if (_healthExtraNotesCtrl.text.trim().isNotEmpty) 'Sağlık Notu: ${_healthExtraNotesCtrl.text.trim()}',
+    ];
+    final combinedMedicalSummary = summaryParts.join(' | ');
+
+    // 1. Kullanıcı Bilgileri
+    await prefs.setString('child_name', childName);
+    await prefs.setString('sos_child_name', childName);
+    await prefs.setString('user_emergency_name', childName);
+    await prefs.setString('user_birth_date', birthDate);
+    await prefs.setString('sos_child_age', birthDate);
+    await prefs.setString('sos_home_address', address);
+    await prefs.setString('user_home_address', address);
+    await prefs.setString('child_diagnosis', _selectedDiagnosis);
+    await prefs.setString('avatar', _selectedAvatar);
+
+    // 2. Destek Kişilerim
+    await prefs.setString('support_family1_name', _family1NameCtrl.text.trim());
+    await prefs.setString('support_family1_phone', _family1PhoneCtrl.text.trim());
+    await prefs.setString('support_family1_relation', _family1Relation);
+    await prefs.setBool('support_family1_is_emergency', _family1IsEmergency);
+
+    await prefs.setString('support_family2_name', _family2NameCtrl.text.trim());
+    await prefs.setString('support_family2_phone', _family2PhoneCtrl.text.trim());
+    await prefs.setString('support_family2_relation', _family2Relation);
+    await prefs.setBool('support_family2_is_emergency', _family2IsEmergency);
+
+    await prefs.setString('support_job_coach_name', _jobCoachNameCtrl.text.trim());
+    await prefs.setString('support_job_coach_phone', _jobCoachPhoneCtrl.text.trim());
+    await prefs.setBool('support_job_coach_is_emergency', _jobCoachIsEmergency);
+
+    await prefs.setString('support_shadow_teacher_name', _shadowTeacherNameCtrl.text.trim());
+    await prefs.setString('support_shadow_teacher_phone', _shadowTeacherPhoneCtrl.text.trim());
+    await prefs.setBool('support_shadow_teacher_is_emergency', _shadowTeacherIsEmergency);
+
+    // Destek Kişilerim Rehberi (SupportContactsScreen ve InactivityHelpService için birleştirilmiş liste)
+    final structuredContacts = <Map<String, dynamic>>[];
+    if (_family1NameCtrl.text.trim().isNotEmpty || _family1PhoneCtrl.text.trim().isNotEmpty) {
+      structuredContacts.add({
+        'name': _family1NameCtrl.text.trim().isNotEmpty ? _family1NameCtrl.text.trim() : _family1Relation,
+        'role': _family1Relation,
+        'phone': _family1PhoneCtrl.text.trim(),
+        'avatar': '👨‍👩‍👧',
+        'isJobCoach': false,
+        'isEmergency': _family1IsEmergency,
+      });
+    }
+    if (_family2NameCtrl.text.trim().isNotEmpty || _family2PhoneCtrl.text.trim().isNotEmpty) {
+      structuredContacts.add({
+        'name': _family2NameCtrl.text.trim().isNotEmpty ? _family2NameCtrl.text.trim() : _family2Relation,
+        'role': _family2Relation,
+        'phone': _family2PhoneCtrl.text.trim(),
+        'avatar': '👨‍👩‍👧',
+        'isJobCoach': false,
+        'isEmergency': _family2IsEmergency,
+      });
+    }
+    if (_jobCoachNameCtrl.text.trim().isNotEmpty || _jobCoachPhoneCtrl.text.trim().isNotEmpty) {
+      structuredContacts.add({
+        'name': _jobCoachNameCtrl.text.trim().isNotEmpty ? _jobCoachNameCtrl.text.trim() : 'İş Koçu',
+        'role': 'İş Koçu',
+        'phone': _jobCoachPhoneCtrl.text.trim(),
+        'avatar': '💼',
+        'isJobCoach': true,
+        'isEmergency': _jobCoachIsEmergency,
+      });
+    }
+    if (_shadowTeacherNameCtrl.text.trim().isNotEmpty || _shadowTeacherPhoneCtrl.text.trim().isNotEmpty) {
+      structuredContacts.add({
+        'name': _shadowTeacherNameCtrl.text.trim().isNotEmpty
+            ? _shadowTeacherNameCtrl.text.trim()
+            : 'Gölge Öğretmen/Bakıcı',
+        'role': 'Gölge Öğretmen/Bakıcı',
+        'phone': _shadowTeacherPhoneCtrl.text.trim(),
+        'avatar': '🧑‍🏫',
+        'isJobCoach': false,
+        'isEmergency': _shadowTeacherIsEmergency,
+      });
+    }
+    await prefs.setString('user_support_contacts', jsonEncode(structuredContacts));
+
+    // 3. Kişisel Hassasiyetlerim
+    await prefs.setStringList('user_sensitivities', _selectedSensitivities.toList());
+    await prefs.setString('user_sensitivity_notes', _sensitivityNotesCtrl.text.trim());
+
+    // 4. Acil Durum (SOS)
+    await prefs.setString('sos_parent_name', primarySosName);
+    await prefs.setString('sos_parent_phone', primarySosPhone);
+    await prefs.setString('user_emergency_phone', primarySosPhone);
+    await prefs.setString('sos_alt_phone', secondarySosPhone);
+    await prefs.setString('sos_contact1_name', _sos1NameCtrl.text.trim());
+    await prefs.setString('sos_contact1_phone', _sos1PhoneCtrl.text.trim());
+    await prefs.setString('sos_contact2_name', _sos2NameCtrl.text.trim());
+    await prefs.setString('sos_contact2_phone', _sos2PhoneCtrl.text.trim());
+    await prefs.setString('sos_medical_notes', combinedMedicalSummary);
+    await prefs.setString('user_emergency_notes', combinedMedicalSummary);
+    await _saveDisasterCardDraft();
+
+    // 5. Sağlık Bilgim
+    await prefs.setString('health_medications', _medicationsCtrl.text.trim());
+    await prefs.setString('health_chronic_diseases', _chronicDiseasesCtrl.text.trim());
+    await prefs.setString('health_extra_notes', _healthExtraNotesCtrl.text.trim());
+
+    await prefs.setBool('is_registered', true);
+    await prefs.setBool('initial_info_completed', true);
+
+    // Öğretmen Paneline Senkronize Et
+    final calculatedAge = _calculateAgeFromBirthDate(birthDate).toString();
+    await TeacherSyncService.instance.registerStudent(
+      name: childName,
+      age: calculatedAge,
+      diagnosis: _selectedDiagnosis,
+      parentName: primarySosName,
+      parentPhone: primarySosPhone,
+      avatar: _selectedAvatar,
+      address: address,
+      notes: combinedMedicalSummary,
+    );
+  }
+
+  /// Girilen telefon numaralarının (10 veya 11 hane) ve T.C. Kimlik numarasının (11 hane) limitlerini doğrular
+  String? _validatePhoneAndNumericLimits() {
+    final phoneChecks = <Map<String, String>>[
+      {'label': 'Aileden 1. Destek Kişisi Telefonu', 'val': _family1PhoneCtrl.text.trim()},
+      {'label': 'Aileden 2. Destek Kişisi Telefonu', 'val': _family2PhoneCtrl.text.trim()},
+      {'label': 'İş Koçu Telefonu', 'val': _jobCoachPhoneCtrl.text.trim()},
+      {'label': 'Gölge Öğretmen/Bakıcı Telefonu', 'val': _shadowTeacherPhoneCtrl.text.trim()},
+      {'label': 'Acil Durum 1. Kişi Telefonu', 'val': _sos1PhoneCtrl.text.trim()},
+      {'label': 'Acil Durum 2. Kişi Telefonu', 'val': _sos2PhoneCtrl.text.trim()},
+    ];
+
+    for (final item in phoneChecks) {
+      final raw = item['val'] ?? '';
+      if (raw.isNotEmpty) {
+        final digits = raw.replaceAll(RegExp(r'\D'), '');
+        if (digits.length < 10 || digits.length > 11) {
+          return '${item['label']} 10 veya 11 haneli olmalıdır (Girilen: ${digits.length} hane).';
+        }
+      }
+    }
+
+    final tc = _disasterCardTcCtrl.text.trim();
+    if (tc.isNotEmpty && tc.length != 11) {
+      return 'Afet Kişi Kartındaki T.C. Kimlik Numarası 11 haneli olmalıdır.';
+    }
+    return null;
+  }
+
   Future<void> _handleRegister() async {
     final username = _usernameCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
 
     setState(() => _errorMessage = '');
 
-    // 1. Temel Hesap Doğrulamaları
     if (username.isEmpty) {
       _showError('Lütfen bir kullanıcı adı belirleyin.');
       return;
@@ -252,7 +1015,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // ─── VELİ KAYDI AKIŞI (Sade & Pratik) ───────────────────────────
+    // VELİ KAYDI AKIŞI
     if (_selectedRole == UserRole.parent) {
       final parentName = _parentNameController.text.trim();
       final linkedStudent = _studentUsernameCtrl.text.trim();
@@ -281,15 +1044,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(linkedStudent.isNotEmpty
-              ? 'Veli hesabınız oluşturuldu ve "@$linkedStudent" öğrencisine bağlandı! 🎉'
-              : 'Veli hesabınız başarıyla oluşturuldu! 🎉'),
-          backgroundColor: AppColors.positiveGreen,
-        ),
-      );
-
       await ParentChildSyncService().setDeviceRole(DeviceRole.parentCompanion);
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
@@ -300,59 +1054,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // ─── ÖĞRENCİ KAYDI AKIŞI (Tam Profil & SOS) ─────────────────────
+    // KULLANICI / ÖĞRENCİ KAYDI AKIŞI
     final childName = _childNameController.text.trim();
-    final parentPhone = _parentPhoneController.text.trim();
-
     if (childName.isEmpty) {
-      _showError('Lütfen çocuğun adını ve soyadını giriniz.');
-      return;
-    }
-    if (parentPhone.isEmpty) {
-      _showError('Acil durumda aranacak ebeveyn telefon numarasını giriniz.');
+      _showError('Lütfen 1. Kullanıcı Bilgileri bölümünden Kullanıcı Adı Soyadı giriniz.');
       return;
     }
 
-    final cleanPhone = parentPhone.replaceAll(RegExp(r'\D'), '');
-    if (cleanPhone.length < 10) {
-      _showError('Lütfen geçerli bir telefon numarası giriniz (en az 10-11 hane).');
+    final limitErr = _validatePhoneAndNumericLimits();
+    if (limitErr != null) {
+      _showError(limitErr);
       return;
-    }
-
-    // Çift hesap (Öğrenci + Veli birlikte açma) kontrolü
-    if (_createDualParentAccount) {
-      final dualParentUser = _dualParentUsernameCtrl.text.trim();
-      final dualParentPass = _dualParentPasswordCtrl.text.trim();
-
-      if (dualParentUser.isEmpty) {
-        _showError('Lütfen oluşturulacak ebeveyn kullanıcı adını girin.');
-        return;
-      }
-      if (dualParentPass.length < 3) {
-        _showError('Ebeveyn şifresi en az 3 karakter olmalıdır.');
-        return;
-      }
-      if (dualParentUser.toLowerCase() == username.toLowerCase()) {
-        _showError('Öğrenci ve ebeveyn kullanıcı adı aynı olamaz.');
-        return;
-      }
     }
 
     setState(() => _isLoading = true);
 
-    final childAge = _ageController.text.trim();
-    final parentName = _parentNameController.text.trim().isNotEmpty
-        ? _parentNameController.text.trim()
-        : 'Ebeveyn';
-    final altPhone = _altPhoneController.text.trim();
-    final address = _addressController.text.trim();
-
-    String notes = _medicalNotesController.text.trim();
-    if (notes.isEmpty) {
-      notes = 'Tanı: $_selectedDiagnosis. Konuşma güçlüğü vardır, sakin yaklaşınız.';
-    }
-
-    // 1. Öğrenci Hesabını Oluştur
     final res = await AuthService().register(
       username: username,
       password: password,
@@ -367,80 +1083,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // 2. Eğer istendiyse Ebeveyn Hesabını da Arka Planda Oluştur ve Öğrenciye Bağla
-    if (_createDualParentAccount) {
-      await AuthService().register(
-        username: _dualParentUsernameCtrl.text.trim(),
-        password: _dualParentPasswordCtrl.text.trim(),
-        role: UserRole.parent,
-        displayName: parentName,
-        avatar: '👩',
-        linkedStudentUsername: username,
-      );
-      // Aktif oturumu öğrenci olarak tut
-      await AuthService().login(username: username, password: password);
-    }
-
-    // 3. SOS ve Profil Verilerini Kalıcı Sakla
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('sos_child_name', childName);
-    await prefs.setString('child_name', childName);
-    await prefs.setString('user_emergency_name', childName);
-    await prefs.setString('sos_child_age', childAge.isNotEmpty ? '$childAge Yaşında' : '');
-    await prefs.setString('sos_parent_name', parentName);
-    await prefs.setString('sos_parent_phone', parentPhone);
-    await prefs.setString('user_emergency_phone', parentPhone);
-    await prefs.setString('sos_alt_phone', altPhone);
-    await prefs.setString('sos_home_address', address);
-    await prefs.setString('user_home_address', address);
-    await prefs.setString('sos_medical_notes', notes);
-    await prefs.setString('user_emergency_notes', notes);
-    await prefs.setString('child_diagnosis', _selectedDiagnosis);
-    await prefs.setString('avatar', _selectedAvatar);
-    await prefs.setBool('is_registered', true);
-    await prefs.setBool('initial_info_completed', true);
-
-    // Destek Kişileri (user_support_contacts) kaydı
-    final List<Map<String, dynamic>> finalContacts = List.from(_supportContacts);
-    final cleanParentPhone = parentPhone.replaceAll(RegExp(r'\D'), '');
-    final hasParent = finalContacts.any((c) =>
-        (c['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '') == cleanParentPhone);
-    if (!hasParent) {
-      finalContacts.insert(0, {
-        'name': parentName,
-        'role': 'Aile',
-        'phone': parentPhone,
-        'avatar': '👨‍👩‍👧',
-        'isJobCoach': false,
-      });
-    }
-    if (altPhone.isNotEmpty) {
-      final cleanAlt = altPhone.replaceAll(RegExp(r'\D'), '');
-      final hasAlt = finalContacts.any((c) =>
-          (c['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '') == cleanAlt);
-      if (!hasAlt) {
-        finalContacts.add({
-          'name': '2. Destek Kişim',
-          'role': 'Aile',
-          'phone': altPhone,
-          'avatar': '👨‍👩‍👧',
-          'isJobCoach': false,
-        });
-      }
-    }
-    await prefs.setString('user_support_contacts', jsonEncode(finalContacts));
-
-    // CANLI SENKRONİZASYON: Yönetici ve Öğretmen Web Paneline Öğrenciyi Bildir
-    await TeacherSyncService.instance.registerStudent(
-      name: childName,
-      age: childAge,
-      diagnosis: _selectedDiagnosis,
-      parentName: parentName,
-      parentPhone: parentPhone,
-      avatar: _selectedAvatar,
-      address: address,
-      notes: notes,
-    );
+    await _persistAllProfileFields();
 
     if (!mounted) return;
     final gameService = Provider.of<GameProgressService>(context, listen: false);
@@ -448,17 +1091,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     await gameService.loadData();
 
     setState(() => _isLoading = false);
-
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_createDualParentAccount
-            ? 'Öğrenci ve Ebeveyn hesapları başarıyla oluşturulup bağlandı! 🎉'
-            : 'Genel bilgiler ve öğrenci hesabı başarıyla kaydedildi! 🎉'),
-        backgroundColor: AppColors.positiveGreen,
-      ),
-    );
 
     await ParentChildSyncService().setDeviceRole(DeviceRole.childTerminal);
     if (!mounted) return;
@@ -469,103 +1102,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  /// 💾 Genel Bilgileri Güncelle & Kaydet (Düzenleme Modu)
+  /// 💾 Genel Bilgileri Güncelle & Kaydet
   Future<void> _handleSaveGeneralInfo() async {
     final childName = _childNameController.text.trim();
-    final parentPhone = _parentPhoneController.text.trim();
-
     if (childName.isEmpty) {
-      _showError('Lütfen öğrencinin / çocuğun adını giriniz.');
-      return;
-    }
-    if (parentPhone.isEmpty) {
-      _showError('Acil durumda aranacak ebeveyn telefon numarasını giriniz.');
+      _showError('Lütfen 1. Kullanıcı Bilgileri bölümünden Kullanıcı Adı Soyadı giriniz.');
       return;
     }
 
-    final cleanPhone = parentPhone.replaceAll(RegExp(r'\D'), '');
-    if (cleanPhone.length < 10) {
-      _showError('Lütfen geçerli bir telefon numarası giriniz (en az 10-11 hane).');
+    final limitErr = _validatePhoneAndNumericLimits();
+    if (limitErr != null) {
+      _showError(limitErr);
       return;
     }
 
     setState(() => _isLoading = true);
 
-    final childAge = _ageController.text.trim();
-    final parentName = _parentNameController.text.trim().isNotEmpty
-        ? _parentNameController.text.trim()
-        : 'Ebeveyn';
-    final altPhone = _altPhoneController.text.trim();
-    final address = _addressController.text.trim();
-
-    String notes = _medicalNotesController.text.trim();
-    if (notes.isEmpty) {
-      notes = 'Tanı: $_selectedDiagnosis.';
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('sos_child_name', childName);
-    await prefs.setString('child_name', childName);
-    await prefs.setString('user_emergency_name', childName);
-    await prefs.setString('sos_child_age', childAge.isNotEmpty ? '$childAge Yaşında' : '');
-    await prefs.setString('sos_parent_name', parentName);
-    await prefs.setString('sos_parent_phone', parentPhone);
-    await prefs.setString('user_emergency_phone', parentPhone);
-    await prefs.setString('sos_alt_phone', altPhone);
-    await prefs.setString('sos_home_address', address);
-    await prefs.setString('user_home_address', address);
-    await prefs.setString('sos_medical_notes', notes);
-    await prefs.setString('user_emergency_notes', notes);
-    await prefs.setString('child_diagnosis', _selectedDiagnosis);
-    await prefs.setString('avatar', _selectedAvatar);
-    await prefs.setBool('is_registered', true);
-    await prefs.setBool('initial_info_completed', true);
-
-    // Destek kişileri rehberinde Ebeveyn kaydını senkronize et ve kaydet
-    try {
-      final List<Map<String, dynamic>> finalContacts = List.from(_supportContacts);
-      final cleanParentPhone = parentPhone.replaceAll(RegExp(r'\D'), '');
-      final parentIdx = finalContacts.indexWhere((c) =>
-          (c['phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '') == cleanParentPhone ||
-          (c['role'] ?? '').toString().toLowerCase() == 'aile');
-      if (parentIdx >= 0) {
-        finalContacts[parentIdx]['name'] = parentName;
-        finalContacts[parentIdx]['phone'] = parentPhone;
-      } else {
-        finalContacts.insert(0, {
-          'name': parentName,
-          'role': 'Aile',
-          'phone': parentPhone,
-          'avatar': '👨‍👩‍👧',
-          'isJobCoach': false,
-        });
-      }
-      await prefs.setString('user_support_contacts', jsonEncode(finalContacts));
-    } catch (_) {}
+    await _persistAllProfileFields();
 
     if (mounted) {
       final gameService = Provider.of<GameProgressService>(context, listen: false);
       await gameService.saveProfile(childName, _selectedAvatar);
-      // CANLI SENKRONİZASYON: Yönetici ve Öğretmen Web Paneline Öğrenciyi Bildir
-      await TeacherSyncService.instance.registerStudent(
-        name: childName,
-        age: childAge,
-        diagnosis: _selectedDiagnosis,
-        parentName: parentName,
-        parentPhone: parentPhone,
-        avatar: _selectedAvatar,
-        address: address,
-        notes: notes,
-      );
       await gameService.loadData();
     }
 
     setState(() => _isLoading = false);
-
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Genel bilgiler ve acil durum kayıtları başarıyla güncellendi! ✅'),
+        content: Text('Genel bilgiler başarıyla kaydedildi! ✅'),
         backgroundColor: AppColors.positiveGreen,
       ),
     );
@@ -582,14 +1148,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final isParentRole = _selectedRole == UserRole.parent && !widget.isEditing;
+    final availableSupportContacts = _getAvailableSupportContactsForSelection();
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.isOnboarding
+        title: Text(widget.isOnboarding || widget.isEditing
             ? 'Genel Bilgiler'
-            : (widget.isEditing
-                ? 'Genel Bilgiler'
-                : (isParentRole ? 'Veli Hesabı Oluştur' : 'Genel Bilgiler & Kayıt'))),
+            : (isParentRole ? 'Veli Hesabı Oluştur' : 'Genel Bilgiler & Kayıt')),
         elevation: 0,
         actions: [
           Padding(
@@ -637,7 +1202,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ─── BAŞLIK & KARŞILAMA BANNERI ────────────────────────
+                // ─── BAŞLIK BANNERI ──────────────────────────────────────
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -645,43 +1210,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       width: 54,
                       height: 54,
                       decoration: BoxDecoration(
-                        color: widget.isEditing
-                            ? AppColors.buttonIndigo.withValues(alpha: 0.15)
-                            : AppColors.buttonOrange.withValues(alpha: 0.15),
+                        color: AppColors.buttonIndigo.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
-                      child: Center(
-                        child: Text(
-                          widget.isEditing
-                              ? '📋'
-                              : (isParentRole ? '👨‍👩‍👧' : '🎈'),
-                          style: const TextStyle(fontSize: 28),
-                        ),
+                      child: const Center(
+                        child: Text('📋', style: TextStyle(fontSize: 28)),
                       ),
                     ),
                     const SizedBox(width: 14),
-                    Expanded(
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            widget.isEditing
-                                ? 'Genel Bilgiler'
-                                : (isParentRole ? 'Veli Kontrol Hesabı' : 'Genel Bilgiler & Kayıt'),
-                            style: const TextStyle(
+                            'Genel Bilgiler',
+                            style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: AppColors.textPrimary,
                             ),
                           ),
-                          const SizedBox(height: 3),
+                          SizedBox(height: 3),
                           Text(
-                            widget.isEditing
-                                ? 'Öğrenci, veli ve acil durum (SOS) bilgilerinizi buradan inceleyip güncelleyebilirsiniz.'
-                                : (isParentRole
-                                    ? 'Çocuğunuzun iletişimini takip etmek ve yönetmek için veli hesabı açın.'
-                                    : 'Çocuğunuzun bilgileri, veli ve acil durum iletişimi için formu doldurunuz.'),
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                            '+1 Bağımsız Yaşam Planım — Kullanıcı, destek kişileri, kişisel hassasiyetler, SOS ve sağlık bilgileri.',
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -690,7 +1242,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Hata Banner'ı
                 if (_errorMessage.isNotEmpty) ...[
                   Container(
                     width: double.infinity,
@@ -709,21 +1260,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
 
                 if (!widget.isEditing) ...[
-                  // ─── ROL SEÇİCİ ─────────────────────────────────────────
                   _buildSectionHeader('👤 Hesap Rolü', 'Kayıt olmak istediğiniz kullanıcı türünü seçin'),
                   const SizedBox(height: 10),
-
                   Row(
                     children: [
                       Expanded(
                         child: _buildRoleChip(
                           role: UserRole.student,
-                          title: 'Öğrenci (Çocuk)',
-                          icon: Icons.child_care_rounded,
+                          title: 'Kullanıcı',
+                          icon: Icons.person_rounded,
                           onSelect: () {
                             setState(() {
                               _selectedRole = UserRole.student;
-                              _selectedAvatar = '🐻';
+                              _selectedAvatar = 'assets/images/avatars/avatar_1.jpg';
                             });
                           },
                         ),
@@ -747,20 +1296,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                // ═══════════════════════════════════════════════════════════
-                // A) SADE VELİ KAYDI FORMU
-                // ═══════════════════════════════════════════════════════════
                 if (isParentRole) ...[
-                  _buildSectionHeader('🔐 Veli Giriş & Bağlantı Bilgileri', 'Windows veya telefonunuzdan giriş için kullanılacaktır'),
+                  // VELİ KAYDI FORMU
+                  _buildSectionHeader('🔐 Veli Giriş & Bağlantı Bilgileri', 'Veli kontrol paneline giriş için kullanılır'),
                   const SizedBox(height: 10),
-
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: Neu.elevated(radius: 20, blur: 8),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Avatar
                         const Text('Veli Avatarı', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         const SizedBox(height: 8),
                         Wrap(
@@ -789,77 +1334,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           }).toList(),
                         ),
                         const SizedBox(height: 16),
-
                         _buildTextField(
                           controller: _parentNameController,
                           label: 'Veli Adı Soyadı *',
-                          hint: 'Örn: Ayşe Hanım (Annesi)',
+                          hint: 'Örn: Ayşe Yılmaz',
                           icon: Icons.badge_rounded,
+                          maxLength: 50,
+                          inputFormatters: [LengthLimitingTextInputFormatter(50)],
                         ),
                         const SizedBox(height: 12),
-
                         _buildTextField(
                           controller: _usernameCtrl,
                           label: 'Veli Kullanıcı Adı *',
-                          hint: 'Örn: ayse_anne veya veli123',
+                          hint: 'Örn: ayse_anne',
                           icon: Icons.alternate_email_rounded,
+                          maxLength: 30,
+                          inputFormatters: [LengthLimitingTextInputFormatter(30)],
                         ),
                         const SizedBox(height: 12),
-
                         _buildTextField(
                           controller: _passwordCtrl,
                           label: 'Veli Giriş Şifresi *',
-                          hint: 'En az 3 karakter',
+                          hint: 'En az 3 karakter (Maks. 32)',
                           icon: Icons.lock_rounded,
                           obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                              color: AppColors.textSecondary,
-                            ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                          ),
+                          maxLength: 32,
+                          inputFormatters: [LengthLimitingTextInputFormatter(32)],
                         ),
-                        const SizedBox(height: 16),
-
-                        // Bağlanılacak Öğrenci
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.buttonTeal.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: AppColors.buttonTeal.withValues(alpha: 0.3)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildTextField(
-                                controller: _studentUsernameCtrl,
-                                label: '🔗 Bağlanacak Öğrencinin Kullanıcı Adı',
-                                hint: 'Örn: az önce oluşturduğunuz öğrencinin kullanıcı adı',
-                                icon: Icons.link_rounded,
-                              ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                '💡 Chrome\'da veya başka cihazda açtığınız öğrenci hesabının adını buraya yazarak anında eşleşebilirsiniz.',
-                                style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: _studentUsernameCtrl,
+                          label: 'Bağlanacak Kullanıcının Hesap Adı',
+                          hint: 'Örn: can123',
+                          icon: Icons.link_rounded,
+                          maxLength: 30,
+                          inputFormatters: [LengthLimitingTextInputFormatter(30)],
                         ),
                       ],
                     ),
                   ),
                 ] else ...[
-                  // ═══════════════════════════════════════════════════════════
-                  // B) ÖĞRENCİ KAYDI FORMU (TAM PROFİL & SOS + ÇİFT HESAP SEÇENEĞİ)
-                  // ═══════════════════════════════════════════════════════════
-
-                  // 0. BÖLÜM: ÖĞRENCİ HESAP BİLGİLERİ (Sadece Yeni Kayıtta)
                   if (!widget.isEditing) ...[
-                    _buildSectionHeader('🔐 Öğrenci Giriş Bilgileri', 'Öğrenci terminaline giriş için kullanılacaktır'),
+                    _buildSectionHeader('🔐 Giriş Bilgileri', 'Uygulamaya giriş için kullanılacaktır'),
                     const SizedBox(height: 10),
-
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: Neu.elevated(radius: 20, blur: 8),
@@ -867,18 +1384,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         children: [
                           _buildTextField(
                             controller: _usernameCtrl,
-                            label: 'Öğrenci Kullanıcı Adı *',
-                            hint: 'Örn: can veya ahmet123',
+                            label: 'Hesap Kullanıcı Adı *',
+                            hint: 'Örn: can123',
                             icon: Icons.alternate_email_rounded,
+                            maxLength: 30,
+                            inputFormatters: [LengthLimitingTextInputFormatter(30)],
                           ),
                           const SizedBox(height: 12),
-
                           _buildTextField(
                             controller: _passwordCtrl,
                             label: 'Giriş Şifresi *',
-                            hint: 'En az 3 karakter',
+                            hint: 'En az 3 karakter (Maks. 32)',
                             icon: Icons.lock_rounded,
                             obscureText: _obscurePassword,
+                            maxLength: 32,
+                            inputFormatters: [LengthLimitingTextInputFormatter(32)],
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
@@ -893,8 +1413,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // 1. BÖLÜM: ÇOCUĞUN BİLGİLERİ
-                  _buildSectionHeader('👦 1. Çocuğun Bilgileri', 'Uygulama içinde görünecek profil'),
+                  // ═══════════════════════════════════════════════════════════
+                  // 1. KULLANICI BİLGİLERİ
+                  // ═══════════════════════════════════════════════════════════
+                  _buildSectionHeader('👤 1. Kullanıcı Bilgileri', 'Uygulama içinde görünecek kullanıcı profili'),
                   const SizedBox(height: 10),
 
                   Container(
@@ -903,33 +1425,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Çocuğun Maskotu', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                        const Text('Sevdiği karakteri aşağıdan seçin', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                        const Text('Kullanıcı Avatarı', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 10),
-
                         Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                          spacing: 10,
+                          runSpacing: 10,
                           children: _avatars.map((av) {
                             final isSel = av == _selectedAvatar;
                             return GestureDetector(
                               onTap: () => setState(() => _selectedAvatar = av),
                               child: AnimatedContainer(
                                 duration: const Duration(milliseconds: 200),
-                                width: 44,
-                                height: 44,
+                                width: 64,
+                                height: 64,
+                                padding: const EdgeInsets.all(3),
                                 decoration: isSel
                                     ? BoxDecoration(
-                                        color: AppColors.buttonIndigo.withValues(alpha: 0.25),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: AppColors.buttonIndigo, width: 2.5),
+                                        color: AppColors.buttonIndigo.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: AppColors.buttonIndigo, width: 3),
                                       )
                                     : BoxDecoration(
-                                        color: AppColors.background,
-                                        borderRadius: BorderRadius.circular(12),
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(16),
                                         border: Border.all(color: Colors.black12),
                                       ),
-                                child: Center(child: Text(av, style: const TextStyle(fontSize: 22))),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.asset(
+                                    av,
+                                    fit: BoxFit.cover,
+                                      alignment: Alignment.topCenter,
+                                    errorBuilder: (_, _, _) => const Center(child: Icon(Icons.person)),
+                                  ),
+                                ),
                               ),
                             );
                           }).toList(),
@@ -938,27 +1467,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                         _buildTextField(
                           controller: _childNameController,
-                          label: 'Çocuğun Adı Soyadı *',
+                          label: 'Kullanıcı Adı Soyadı *',
                           hint: 'Örn: Can Yılmaz',
                           icon: Icons.person_rounded,
+                          maxLength: 50,
+                          inputFormatters: [LengthLimitingTextInputFormatter(50)],
                         ),
                         const SizedBox(height: 12),
 
+                        // Kullanıcı Yaşı (gg/aa/yyyy olarak seçilsin)
+                        GestureDetector(
+                          onTap: _pickBirthDate,
+                          child: AbsorbPointer(
+                            child: _buildTextField(
+                              controller: _birthDateController,
+                              label: 'Kullanıcı Yaşı (gg/aa/yyyy)',
+                              hint: 'gg/aa/yyyy seçmek için dokunun',
+                              icon: Icons.calendar_month_rounded,
+                              maxLength: 10,
+                              suffixIcon: const Icon(Icons.date_range_rounded, color: AppColors.buttonIndigo),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Ev Adresi (Buraya taşındı)
                         _buildTextField(
-                          controller: _ageController,
-                          label: 'Çocuğun Yaşı',
-                          hint: 'Örn: 7',
-                          icon: Icons.cake_rounded,
-                          keyboardType: TextInputType.number,
-                          maxLength: 2,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(2),
-                          ],
+                          controller: _addressController,
+                          label: 'Ev Adresi',
+                          hint: 'Örn: Kadıköy, İstanbul',
+                          icon: Icons.home_rounded,
+                          maxLines: 2,
+                          maxLength: 250,
+                          inputFormatters: [LengthLimitingTextInputFormatter(250)],
                         ),
                         const SizedBox(height: 16),
 
-                        const Text('Özel Durumu / Tanısı', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        // Tanı (Alfabetik Sırada)
+                        const Text('Tanı', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 6,
@@ -966,7 +1512,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           children: _diagnosisOptions.map((diag) {
                             final isSel = diag == _selectedDiagnosis;
                             return ChoiceChip(
-                              label: Text(diag, style: TextStyle(fontSize: 12, color: isSel ? Colors.white : AppColors.textPrimary)),
+                              label: Text(
+                                diag,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isSel ? Colors.white : AppColors.textPrimary,
+                                ),
+                              ),
                               selected: isSel,
                               selectedColor: AppColors.buttonIndigo,
                               backgroundColor: AppColors.background,
@@ -981,129 +1533,230 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // 2. BÖLÜM: EBEVEYN & ACİL DURUM (SOS)
-                  _buildSectionHeader('🚨 2. Ebeveyn & Acil Durum (SOS)', 'Acil butonuna ve güvenlik kartına işlenir'),
-                  const SizedBox(height: 10),
+                  // ═══════════════════════════════════════════════════════════
+                  // 2. DESTEK KİŞİLERİM
+                  // (Altındaki 1 dk açıklaması ve Kayıtlı Destek Kişileri (0) kaldırıldı)
+                  // ═══════════════════════════════════════════════════════════
+                  _buildSectionHeader('👥 2. Destek Kişilerim', ''),
+                  const SizedBox(height: 8),
 
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: Neu.elevated(radius: 20, blur: 8),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildTextField(
-                          controller: _parentNameController,
-                          label: 'Ebeveyn Adı & Yakınlık',
-                          hint: 'Örn: Ayşe Yılmaz (Annesi)',
-                          icon: Icons.family_restroom_rounded,
+                        // --- AİLEDEN 1. DESTEK KİŞİSİ ---
+                        _buildSupportPersonBlock(
+                          blockTitle: '👨‍👩‍👧 Aileden Bir Destek Kişisi',
+                          nameController: _family1NameCtrl,
+                          nameLabel: 'Aileden Bir Destek Kişisi Adı Soyadı',
+                          nameHint: 'Örn: Ayşe Yılmaz',
+                          phoneController: _family1PhoneCtrl,
+                          phoneLabel: 'Telefon Numarası (En Fazla 11 Hane)',
+                          selectedRelation: _family1Relation,
+                          onRelationChanged: (val) {
+                            setState(() {
+                              _family1Relation = val;
+                              _syncEmergencyContactsFromSupport();
+                            });
+                          },
+                          isEmergencySelected: _family1IsEmergency,
+                          onEmergencyChanged: (val) {
+                            setState(() {
+                              _family1IsEmergency = val ?? false;
+                              _syncEmergencyContactsFromSupport();
+                            });
+                          },
                         ),
-                        const SizedBox(height: 12),
+                        const Divider(height: 28),
 
+                        // --- AİLEDEN 2. DESTEK KİŞİSİ ---
+                        _buildSupportPersonBlock(
+                          blockTitle: '👨‍👩‍👧‍👦 Aileden İkinci Destek Kişisi',
+                          nameController: _family2NameCtrl,
+                          nameLabel: 'Aileden İkinci Destek Kişisi Adı Soyadı',
+                          nameHint: 'Örn: Mehmet Yılmaz',
+                          phoneController: _family2PhoneCtrl,
+                          phoneLabel: 'Telefon Numarası (En Fazla 11 Hane)',
+                          selectedRelation: _family2Relation,
+                          onRelationChanged: (val) {
+                            setState(() {
+                              _family2Relation = val;
+                              _syncEmergencyContactsFromSupport();
+                            });
+                          },
+                          isEmergencySelected: _family2IsEmergency,
+                          onEmergencyChanged: (val) {
+                            setState(() {
+                              _family2IsEmergency = val ?? false;
+                              _syncEmergencyContactsFromSupport();
+                            });
+                          },
+                        ),
+                        const Divider(height: 28),
+
+                        // --- İŞ KOÇU ---
+                        const Text(
+                          '💼 İş Koçu',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 10),
                         _buildTextField(
-                          controller: _parentPhoneController,
-                          label: 'Acil Durum Telefonu * (Direkt Aranacak - 11 Hane)',
-                          hint: 'Örn: 05551234567 (11 Hane)',
+                          controller: _jobCoachNameCtrl,
+                          label: 'İş Koçu Adı Soyadı',
+                          hint: 'Örn: Selin Demir',
+                          icon: Icons.work_rounded,
+                          maxLength: 50,
+                          inputFormatters: [LengthLimitingTextInputFormatter(50)],
+                        ),
+                        const SizedBox(height: 10),
+                        _buildTextField(
+                          controller: _jobCoachPhoneCtrl,
+                          label: 'İş Koçu Telefonu (En Fazla 11 Hane)',
+                          hint: 'Örn: 05321234567',
                           icon: Icons.phone_rounded,
                           keyboardType: TextInputType.phone,
-                          iconColor: AppColors.accentRed,
                           maxLength: 11,
+                          showCounter: true,
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(11),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: AppColors.accentRed,
+                          title: const Text(
+                            'Bu kişiyi Acil Durum Kişisi olarak seç',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          value: _jobCoachIsEmergency,
+                          onChanged: (val) {
+                            setState(() {
+                              _jobCoachIsEmergency = val ?? false;
+                              _syncEmergencyContactsFromSupport();
+                            });
+                          },
+                        ),
+                        const Divider(height: 24),
 
+                        // --- GÖLGE ÖĞRETMEN / BAKICI VB. ---
+                        const Text(
+                          '🧑‍🏫 Gölge Öğretmen / Bakıcı vb.',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 10),
                         _buildTextField(
-                          controller: _altPhoneController,
-                          label: 'İkinci Telefon (Baba/Vasi - 11 Hane Opsiyonel)',
-                          hint: 'Örn: 05329876543 (11 Hane)',
-                          icon: Icons.phone_forwarded_rounded,
+                          controller: _shadowTeacherNameCtrl,
+                          label: 'Gölge Öğretmen/Bakıcı vb. Adı Soyadı',
+                          hint: 'Örn: Zeynep Kaya',
+                          icon: Icons.school_rounded,
+                          maxLength: 50,
+                          inputFormatters: [LengthLimitingTextInputFormatter(50)],
+                        ),
+                        const SizedBox(height: 10),
+                        _buildTextField(
+                          controller: _shadowTeacherPhoneCtrl,
+                          label: 'Gölge Öğretmen/Bakıcı vb. Telefonu (En Fazla 11 Hane)',
+                          hint: 'Örn: 05441234567',
+                          icon: Icons.phone_rounded,
                           keyboardType: TextInputType.phone,
                           maxLength: 11,
+                          showCounter: true,
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(11),
                           ],
                         ),
-                        const SizedBox(height: 12),
-
-                        _buildTextField(
-                          controller: _addressController,
-                          label: 'Ev Adresi / Semt',
-                          hint: 'Örn: Kadıköy, İstanbul (Kaybolma durumunda kullanılır)',
-                          icon: Icons.home_rounded,
-                          maxLines: 2,
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: AppColors.accentRed,
+                          title: const Text(
+                            'Bu kişiyi Acil Durum Kişisi olarak seç',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                          value: _shadowTeacherIsEmergency,
+                          onChanged: (val) {
+                            setState(() {
+                              _shadowTeacherIsEmergency = val ?? false;
+                              _syncEmergencyContactsFromSupport();
+                            });
+                          },
                         ),
                         const SizedBox(height: 12),
 
-                        _buildTextField(
-                          controller: _medicalNotesController,
-                          label: 'Özel Notlar & Alerjiler',
-                          hint: 'Örn: Fıstık alerjisi var. Yüksek sesten tedirgin olur.',
-                          icon: Icons.medical_information_rounded,
-                          maxLines: 2,
+                        // --- DESTEK KİŞİLERİM REHBERİ (Bu menü altına taşındı) ---
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFDF2F8),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFF472B6).withValues(alpha: 0.45)),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFCE7F3),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.volunteer_activism_rounded, color: Color(0xFFBE185D), size: 24),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Destek Kişilerim Rehberi',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF9D174D)),
+                                    ),
+                                    SizedBox(height: 2),
+                                    Text(
+                                      'Tüm destek kişilerini görüntüleyin ve yönetin.',
+                                      style: TextStyle(fontSize: 11, color: Color(0xFFBE185D)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFBE185D),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                                onPressed: () async {
+                                  await _persistAllProfileFields();
+                                  if (!context.mounted) return;
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const SupportContactsScreen()),
+                                  ).then((_) => _loadExistingData());
+                                },
+                                child: const Text('Rehber 📖', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                  if (widget.isEditing) ...[
-                    // DESTEK KİŞİLERİ REHBERİ (Hızlı Erişim & Test Uyumluluğu)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFDF2F8),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: const Color(0xFFF472B6).withValues(alpha: 0.4)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFCE7F3),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.volunteer_activism_rounded, color: Color(0xFFBE185D), size: 28),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text('Destek Kişilerim Rehberi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF9D174D))),
-                                SizedBox(height: 3),
-                                Text('İş koçu, öğretmen ve aile numaralarını yönetin.', style: TextStyle(fontSize: 11, color: Color(0xFFBE185D))),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFBE185D),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const SupportContactsScreen()),
-                              ).then((_) => _loadExistingData());
-                            },
-                            child: const Text('Rehber 📖', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // ─── 3. BÖLÜM: DESTEK KİŞİLERİ (İŞ KOÇU & AİLE REHBERİ) ───
+                  // ═══════════════════════════════════════════════════════════
+                  // 3. KİŞİSEL HASSASİYETLERİM (Çoklu Seçim + Not Kısmı)
+                  // ═══════════════════════════════════════════════════════════
                   _buildSectionHeader(
-                    '👥 3. Destek Kişilerini Seç & Bilgilerini Gir',
-                    '1 dk beklenildiğinde (yemek, rutin, takvim vb.) "Yardım ister misin?" uyarısında aranacak veya WhatsApp atılacak kişiler',
+                    '💛 3. Kişisel Hassasiyetlerim',
+                    'Birden fazla seçeneği işaretleyebilirsiniz',
                   ),
                   const SizedBox(height: 10),
 
@@ -1113,144 +1766,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Bilgilendirme Kutusu
                         Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFF93C5FD)),
-                          ),
-                          child: const Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('💡', style: TextStyle(fontSize: 20)),
-                              SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  'Adımlarda 1 dakika beklenildiğinde sistem sesli ve görsel "Yardım ister misin?" uyarısı verir.\n'
-                                  '• Aileden biri seçilirse telefonla arar (tel:)\n'
-                                  '• İş Koçu seçilirse WhatsApp mesajı (wa.me) açar',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    height: 1.35,
-                                    color: Color(0xFF1E3A8A),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Ekli Destek Kişileri Başlığı
-                        Text(
-                          'Kayıtlı Destek Kişileri (${_supportContacts.length})',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                        ),
-                        const SizedBox(height: 8),
-
-                        if (_supportContacts.isEmpty)
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: const Text(
-                              'ℹ️ Henüz özel bir iş koçu veya ek destek kişisi eklenmedi. Yukarıdaki Ebeveyn numaranız otomatik olarak ana Aile desteği olacaktır. Aşağıdan hemen İş Koçunuzu (WhatsApp) ekleyebilirsiniz.',
-                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                            ),
-                          )
-                        else
-                          Column(
-                            children: _supportContacts.asMap().entries.map((entry) {
-                              final idx = entry.key;
-                              final c = entry.value;
-                              final role = (c['role'] ?? 'Aile').toString();
-                              final isJobCoach = role.toLowerCase().contains('koç') ||
-                                  role.toLowerCase().contains('koc') ||
-                                  c['isJobCoach'] == true;
-
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: isJobCoach ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isJobCoach ? const Color(0xFF86EFAC) : Colors.grey.shade300,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: isJobCoach ? const Color(0xFFDCFCE7) : const Color(0xFFEEF2FF),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Center(
-                                        child: Text(
-                                          (c['avatar'] ?? (isJobCoach ? '💼' : '👨‍👩‍👧')).toString(),
-                                          style: const TextStyle(fontSize: 20),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  c['name'] ?? '',
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: isJobCoach ? const Color(0xFF16A34A) : AppColors.buttonIndigo,
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  isJobCoach ? '💼 İş Koçu (WP)' : '$role (Arama)',
-                                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            c['phone'] ?? '',
-                                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                      tooltip: 'Sil',
-                                      onPressed: () => _removeSupportContact(idx),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        const SizedBox(height: 16),
-
-                        // Yeni Destek Kişisi Ekleme Formu
-                        Container(
+                          width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1F5F9),
@@ -1261,156 +1778,258 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                '➕ Destek Kişisi Seç & Ekle',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                                'Hassasiyet Seçimi (Birden Fazla Seçebilirsiniz):',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF475569),
+                                ),
                               ),
                               const SizedBox(height: 8),
-
-                              const Text('Kişinin Rolü:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
-                              const SizedBox(height: 6),
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 6,
-                                children: [
-                                  ChoiceChip(
-                                    label: const Text('💼 İş Koçu (WhatsApp)'),
-                                    selected: _selectedContactRole == 'İş Koçu',
+                                children: _sensitivityOptions.map((item) {
+                                  final isSelected = _selectedSensitivities.contains(item);
+                                  return ChoiceChip(
+                                    label: Text(
+                                      item,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    selected: isSelected,
                                     selectedColor: const Color(0xFF86EFAC),
-                                    onSelected: (val) {
-                                      if (val) setState(() => _selectedContactRole = 'İş Koçu');
+                                    onSelected: (bool value) {
+                                      setState(() {
+                                        if (value) {
+                                          _selectedSensitivities.add(item);
+                                        } else {
+                                          _selectedSensitivities.remove(item);
+                                        }
+                                      });
                                     },
-                                  ),
-                                  ChoiceChip(
-                                    label: const Text('👨‍👩‍👧 Aile (Arama)'),
-                                    selected: _selectedContactRole == 'Aile',
-                                    selectedColor: const Color(0xFFBFDBFE),
-                                    onSelected: (val) {
-                                      if (val) setState(() => _selectedContactRole = 'Aile');
-                                    },
-                                  ),
-                                  ChoiceChip(
-                                    label: const Text('🧑‍🏫 Öğretmen (Arama)'),
-                                    selected: _selectedContactRole == 'Öğretmen',
-                                    selectedColor: const Color(0xFFFED7AA),
-                                    onSelected: (val) {
-                                      if (val) setState(() => _selectedContactRole = 'Öğretmen');
-                                    },
-                                  ),
-                                  ChoiceChip(
-                                    label: const Text('🌟 Diğer'),
-                                    selected: _selectedContactRole == 'Diğer',
-                                    selectedColor: const Color(0xFFE2E8F0),
-                                    onSelected: (val) {
-                                      if (val) setState(() => _selectedContactRole = 'Diğer');
-                                    },
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-
-                              _buildTextField(
-                                controller: _newContactNameCtrl,
-                                label: 'Destek Kişisi Adı Soyadı',
-                                hint: _selectedContactRole == 'İş Koçu' ? 'Örn: Mehmet Koç (İş Koçum)' : 'Örn: Fatma Teyze',
-                                icon: Icons.badge_rounded,
-                              ),
-                              const SizedBox(height: 10),
-
-                              _buildTextField(
-                                controller: _newContactPhoneCtrl,
-                                label: 'Telefon Numarası (11 Hane)',
-                                hint: 'Örn: 05321234567',
-                                icon: Icons.phone_rounded,
-                                keyboardType: TextInputType.phone,
-                                maxLength: 11,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(11),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _selectedContactRole == 'İş Koçu' ? const Color(0xFF16A34A) : AppColors.buttonIndigo,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                  ),
-                                  icon: const Icon(Icons.person_add_rounded, size: 18),
-                                  label: Text(
-                                    '+ Bu Destek Kişisini Ekle (${_selectedContactRole == 'İş Koçu' ? 'WhatsApp' : 'Telefon'})',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  onPressed: _addSupportContact,
-                                ),
+                                  );
+                                }).toList(),
                               ),
                             ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+
+                        _buildTextField(
+                          controller: _sensitivityNotesCtrl,
+                          label: 'Kişisel Hassasiyetlerim Notu',
+                          hint: 'Hassasiyetlerinizle ilgili eklemek istediğiniz bilgileri buraya yazabilirsiniz...',
+                          icon: Icons.edit_note_rounded,
+                          maxLines: 3,
+                          maxLength: 300,
+                          inputFormatters: [LengthLimitingTextInputFormatter(300)],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ═══════════════════════════════════════════════════════════
+                  // 4. ACİL DURUM (SOS)
+                  // (Destek Kişilerinden Seçilen 1. ve 2. Kişi + Afet Kişi Kartı Butonu)
+                  // ═══════════════════════════════════════════════════════════
+                  _buildSectionHeader(
+                    '🚨 4. Acil Durum (SOS)',
+                    'Acil durumlarda aranacak kişiler Destek Kişilerim bölümünden seçilir',
+                  ),
+                  const SizedBox(height: 10),
+
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: Neu.elevated(radius: 20, blur: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Destek Kişilerinden Hızlı Seçim Çipleri
+                        if (availableSupportContacts.isNotEmpty) ...[
+                          const Text(
+                            'Destek Kişilerimden 1. Acil Durum Kişisini Seç:',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: availableSupportContacts.map((c) {
+                              final isCurrent = _sos1NameCtrl.text == c['name'] && _sos1PhoneCtrl.text == c['phone'];
+                              return ChoiceChip(
+                                label: Text(c['label'] ?? '', style: const TextStyle(fontSize: 11)),
+                                selected: isCurrent,
+                                selectedColor: const Color(0xFFFECACA),
+                                onSelected: (_) {
+                                  setState(() {
+                                    _sos1NameCtrl.text = c['name'] ?? '';
+                                    _sos1PhoneCtrl.text = c['phone'] ?? '';
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
+                        _buildTextField(
+                          controller: _sos1NameCtrl,
+                          label: 'Acil Durumlarda Aranacak 1. Kişi Adı',
+                          hint: 'Destek Kişilerim bölümünden seçilir',
+                          icon: Icons.person_pin_rounded,
+                          iconColor: AppColors.accentRed,
+                          maxLength: 50,
+                          inputFormatters: [LengthLimitingTextInputFormatter(50)],
+                        ),
+                        const SizedBox(height: 10),
+
+                        _buildTextField(
+                          controller: _sos1PhoneCtrl,
+                          label: 'Acil Durumlarda Aranacak 1. Kişi Telefonu (En Fazla 11 Hane)',
+                          hint: 'Destek Kişilerim bölümünden seçilir (05xxxxxxxxx)',
+                          icon: Icons.phone_in_talk_rounded,
+                          iconColor: AppColors.accentRed,
+                          keyboardType: TextInputType.phone,
+                          maxLength: 11,
+                          showCounter: true,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(11),
+                          ],
+                        ),
+                        const Divider(height: 24),
+
+                        if (availableSupportContacts.isNotEmpty) ...[
+                          const Text(
+                            'Destek Kişilerimden 2. Acil Durum Kişisini Seç:',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: availableSupportContacts.map((c) {
+                              final isCurrent = _sos2NameCtrl.text == c['name'] && _sos2PhoneCtrl.text == c['phone'];
+                              return ChoiceChip(
+                                label: Text(c['label'] ?? '', style: const TextStyle(fontSize: 11)),
+                                selected: isCurrent,
+                                selectedColor: const Color(0xFFFED7AA),
+                                onSelected: (_) {
+                                  setState(() {
+                                    _sos2NameCtrl.text = c['name'] ?? '';
+                                    _sos2PhoneCtrl.text = c['phone'] ?? '';
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
+                        _buildTextField(
+                          controller: _sos2NameCtrl,
+                          label: 'Acil Durumlarda Aranacak 2. Kişi Adı',
+                          hint: 'Destek Kişilerim bölümünden seçilir',
+                          icon: Icons.person_pin_circle_rounded,
+                          maxLength: 50,
+                          inputFormatters: [LengthLimitingTextInputFormatter(50)],
+                        ),
+                        const SizedBox(height: 10),
+
+                        _buildTextField(
+                          controller: _sos2PhoneCtrl,
+                          label: 'Acil Durumlarda Aranacak 2. Kişi Telefonu (En Fazla 11 Hane)',
+                          hint: 'Destek Kişilerim bölümünden seçilir (05xxxxxxxxx)',
+                          icon: Icons.phone_forwarded_rounded,
+                          keyboardType: TextInputType.phone,
+                          maxLength: 11,
+                          showCounter: true,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(11),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Afet ve Acil Durum Kişi Kartını Doldur Butonu (İsteğe Bağlı, Kaldığı Yerden Devam Eder)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFBE123C),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            ),
+                            icon: const Icon(Icons.assignment_ind_rounded, size: 22),
+                            label: Text(
+                              _getDisasterCardFilledCount() > 0
+                                  ? 'Afet ve Acil Durum Kişi Kartını Görüntüle / Düzenle (${_getDisasterCardFilledCount()}/7 Dolu)'
+                                  : 'Afet ve Acil Durum Kişi Kartını Doldur (İsteğe Bağlı)',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            onPressed: _openDisasterPersonCardDialog,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 24),
 
-                  if (widget.isEditing) ...[
-                    // Düzenleme modunda ek rehber butonu
-                  ] else ...[
-                    // 3. BÖLÜM: OTOMATİK EBEVEYN HESABI OLUŞTURMA (Opsiyonel Kolaylık)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.buttonIndigo.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: AppColors.buttonIndigo.withValues(alpha: 0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SwitchListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: const Text(
-                              '👨‍👩‍👧 Ebeveyn Giriş Hesabı da Açılsın',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            subtitle: const Text(
-                              'Diğer cihazdan (Windows/telefon) veli girişi yapmak için tek seferde hesabınızı bağlar.',
-                              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                            ),
-                            value: _createDualParentAccount,
-                            activeThumbColor: AppColors.buttonIndigo,
-                            onChanged: (val) => setState(() => _createDualParentAccount = val),
-                          ),
-                          if (_createDualParentAccount) ...[
-                            const SizedBox(height: 10),
-                            _buildTextField(
-                              controller: _dualParentUsernameCtrl,
-                              label: 'Ebeveyn Kullanıcı Adı *',
-                              hint: 'Örn: anne_ayse',
-                              icon: Icons.person_pin_rounded,
-                            ),
-                            const SizedBox(height: 10),
-                            _buildTextField(
-                              controller: _dualParentPasswordCtrl,
-                              label: 'Ebeveyn Giriş Şifresi *',
-                              hint: 'En az 3 karakter',
-                              icon: Icons.lock_outline_rounded,
-                              obscureText: _obscureDualPassword,
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscureDualPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                                  color: AppColors.textSecondary,
-                                ),
-                                onPressed: () => setState(() => _obscureDualPassword = !_obscureDualPassword),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                  // ═══════════════════════════════════════════════════════════
+                  // 5. SAĞLIK BİLGİM
+                  // ═══════════════════════════════════════════════════════════
+                  _buildSectionHeader(
+                    '🏥 5. Sağlık Bilgim',
+                    'Sürekli kullanılan ilaçlar ve kronik hastalık bilgileri',
+                  ),
+                  const SizedBox(height: 10),
+
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: Neu.elevated(radius: 20, blur: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildTextField(
+                          controller: _medicationsCtrl,
+                          label: 'Sürekli Kullandığı İlaçlar',
+                          hint: 'Örn: Sabah/akşam kullanılan düzenli ilaçlar ve dozları...',
+                          icon: Icons.medication_rounded,
+                          maxLines: 2,
+                          maxLength: 300,
+                          inputFormatters: [LengthLimitingTextInputFormatter(300)],
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildTextField(
+                          controller: _chronicDiseasesCtrl,
+                          label: 'Kronik Hastalıklar',
+                          hint: 'Örn: Hipotiroidi, çölyak, kalp rahatsızlığı, diyabet vb.',
+                          icon: Icons.monitor_heart_rounded,
+                          maxLines: 2,
+                          maxLength: 300,
+                          inputFormatters: [LengthLimitingTextInputFormatter(300)],
+                        ),
+                        const SizedBox(height: 12),
+
+                        _buildTextField(
+                          controller: _healthExtraNotesCtrl,
+                          label: 'Ek Sağlık Bilgileri & Notlar',
+                          hint: 'Doktor/hastane bilgisi veya ek sağlık açıklamaları...',
+                          icon: Icons.medical_information_rounded,
+                          maxLines: 2,
+                          maxLength: 300,
+                          inputFormatters: [LengthLimitingTextInputFormatter(300)],
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ],
                 const SizedBox(height: 28),
 
@@ -1459,6 +2078,94 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Aileden 1. ve 2. Destek Kişisi Bloğu (Ad Soyad + Yakınlık Seçimi + Telefon + Acil Durum Kişisi Seçeneği)
+  Widget _buildSupportPersonBlock({
+    required String blockTitle,
+    required TextEditingController nameController,
+    required String nameLabel,
+    required String nameHint,
+    required TextEditingController phoneController,
+    required String phoneLabel,
+    required String selectedRelation,
+    required ValueChanged<String> onRelationChanged,
+    required bool isEmergencySelected,
+    required ValueChanged<bool?> onEmergencyChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          blockTitle,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 10),
+        _buildTextField(
+          controller: nameController,
+          label: nameLabel,
+          hint: nameHint,
+          icon: Icons.person_rounded,
+          maxLength: 50,
+          inputFormatters: [LengthLimitingTextInputFormatter(50)],
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Destek Kişisi Yakınlığı:',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: _familyRelationOptions.map((rel) {
+            final isSel = rel == selectedRelation;
+            return ChoiceChip(
+              label: Text(
+                rel,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                  color: isSel ? Colors.white : AppColors.textPrimary,
+                ),
+              ),
+              selected: isSel,
+              selectedColor: AppColors.buttonIndigo,
+              backgroundColor: AppColors.background,
+              onSelected: (val) {
+                if (val) onRelationChanged(rel);
+              },
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
+        _buildTextField(
+          controller: phoneController,
+          label: phoneLabel,
+          hint: 'Örn: 05551234567',
+          icon: Icons.phone_rounded,
+          keyboardType: TextInputType.phone,
+          maxLength: 11,
+          showCounter: true,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(11),
+          ],
+        ),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          controlAffinity: ListTileControlAffinity.leading,
+          activeColor: AppColors.accentRed,
+          title: const Text(
+            'Bu kişiyi Acil Durum Kişisi olarak seç',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          value: isEmergencySelected,
+          onChanged: onEmergencyChanged,
+        ),
+      ],
     );
   }
 
@@ -1521,11 +2228,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
           title,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
         ),
-        const SizedBox(height: 2),
-        Text(
-          subtitle,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
-        ),
+        if (subtitle.trim().isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          ),
+        ],
       ],
     );
   }
@@ -1541,6 +2250,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     Color? iconColor,
     int? maxLength,
     int maxLines = 1,
+    bool showCounter = false,
     List<TextInputFormatter>? inputFormatters,
   }) {
     return Column(
@@ -1571,7 +2281,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               hintText: hint,
               hintStyle: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               border: InputBorder.none,
-              counterText: '',
+              counterText: showCounter ? null : '',
               suffixIcon: suffixIcon,
             ),
           ),

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 /// Kontrol edilebilir malzeme veya mutfak aleti öğesi (görsel destekli)
@@ -119,4 +120,39 @@ class KitchenRecipe {
 
   bool get isChecklistComplete =>
       ingredients.every((i) => i.isChecked) && tools.every((t) => t.isChecked);
+
+  /// Hem yerel asset (`assets/...`), hem web URL (`http...`), hem de Web Panelden
+  /// yüklenen Base64 (`data:image/...`) görselleri sorunsuz çizen yardımcı metot.
+  static Widget buildImage(
+    String path, {
+    BoxFit fit = BoxFit.cover,
+    Widget Function(BuildContext, Object, StackTrace?)? errorBuilder,
+  }) {
+    final trimmed = path.trim();
+    if (trimmed.startsWith('data:image')) {
+      try {
+        final commaIdx = trimmed.indexOf(',');
+        if (commaIdx != -1) {
+          final bytes = base64Decode(trimmed.substring(commaIdx + 1));
+          return Image.memory(
+            bytes,
+            fit: fit,
+            errorBuilder: errorBuilder,
+          );
+        }
+      } catch (_) {}
+    }
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return Image.network(
+        trimmed,
+        fit: fit,
+        errorBuilder: errorBuilder,
+      );
+    }
+    return Image.asset(
+      trimmed,
+      fit: fit,
+      errorBuilder: errorBuilder,
+    );
+  }
 }

@@ -25,12 +25,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _addressController = TextEditingController();
   final _medicalNotesController = TextEditingController();
 
-  String _selectedAvatar = '🐻';
+  String _selectedAvatar = 'assets/images/avatars/avatar_1.jpg';
   String _selectedDiagnosis = 'Otizm Spektrumu 🧩';
 
   static const List<String> _avatars = [
-    '🐻', '🐰', '🦁', '🐼', '🦊', '🐱',
-    '🐶', '🐨', '🦄', '🚀', '🌟', '🐬',
+    'assets/images/avatars/avatar_1.jpg',
+    'assets/images/avatars/avatar_2.jpg',
+    'assets/images/avatars/avatar_3.jpg',
+    'assets/images/avatars/avatar_4.jpg',
+    'assets/images/avatars/avatar_5.jpg',
+    'assets/images/avatars/avatar_6.jpg',
+    'assets/images/avatars/avatar_7.jpg',
+    'assets/images/avatars/avatar_8.jpg',
+    'assets/images/avatars/avatar_9.jpg',
+    'assets/images/avatars/avatar_10.jpg',
+    'assets/images/avatars/avatar_11.jpg',
+    'assets/images/avatars/avatar_12.jpg',
   ];
 
   static const List<String> _diagnosisOptions = [
@@ -266,8 +276,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           width: 64,
                           height: 64,
                           decoration: Neu.inset(radius: 32),
-                          child: Center(
-                            child: Text(_selectedAvatar, style: const TextStyle(fontSize: 34)),
+                          child: ClipOval(
+                            child: _selectedAvatar.startsWith('assets/')
+                                ? Image.asset(
+                                    _selectedAvatar,
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.topCenter,
+                                    errorBuilder: (_, _, _) => const Icon(Icons.person, size: 32),
+                                  )
+                                : Center(
+                                    child: Text(_selectedAvatar, style: const TextStyle(fontSize: 34)),
+                                  ),
                           ),
                         ),
                         const SizedBox(width: 14),
@@ -300,15 +319,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           onTap: () => setState(() => _selectedAvatar = av),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 200),
-                            width: 44,
-                            height: 44,
+                            width: 52,
+                            height: 52,
+                            padding: const EdgeInsets.all(2),
                             decoration: BoxDecoration(
                               color: isSel ? AppColors.buttonIndigo.withValues(alpha: 0.25) : AppColors.background,
                               borderRadius: BorderRadius.circular(12),
-                              border: isSel ? Border.all(color: AppColors.buttonIndigo, width: 2) : null,
+                              border: isSel ? Border.all(color: AppColors.buttonIndigo, width: 2) : Border.all(color: Colors.black12),
                             ),
-                            child: Center(
-                              child: Text(av, style: const TextStyle(fontSize: 22)),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(9),
+                              child: Image.asset(
+                                av,
+                                fit: BoxFit.cover,
+                                alignment: Alignment.topCenter,
+                                errorBuilder: (_, _, _) => const Icon(Icons.person),
+                              ),
                             ),
                           ),
                         );

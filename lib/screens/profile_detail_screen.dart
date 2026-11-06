@@ -39,8 +39,18 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   bool _initialized = false;
 
   static const List<String> _avatars = [
-    '🐻', '🐰', '🦊', '🐱', '🐶', '🦁',
-    '🐼', '🐨', '🦋', '🌟', '🐢', '🐙',
+    'assets/images/avatars/avatar_1.jpg',
+    'assets/images/avatars/avatar_2.jpg',
+    'assets/images/avatars/avatar_3.jpg',
+    'assets/images/avatars/avatar_4.jpg',
+    'assets/images/avatars/avatar_5.jpg',
+    'assets/images/avatars/avatar_6.jpg',
+    'assets/images/avatars/avatar_7.jpg',
+    'assets/images/avatars/avatar_8.jpg',
+    'assets/images/avatars/avatar_9.jpg',
+    'assets/images/avatars/avatar_10.jpg',
+    'assets/images/avatars/avatar_11.jpg',
+    'assets/images/avatars/avatar_12.jpg',
   ];
   static const List<String> _roles = [
     'Anne', 'Baba', 'Öğretmen', 'Terapist', 'Bakıcı', 'Diğer',
@@ -312,18 +322,27 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                         width: 90,
                         height: 90,
                         decoration: Neu.elevated(radius: 45, blur: 12),
-                        child: Center(
-                          child: Text(_avatar, style: const TextStyle(fontSize: 48)),
+                        child: ClipOval(
+                          child: _avatar.startsWith('assets/')
+                              ? Image.asset(
+                                  _avatar,
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.topCenter,
+                                  errorBuilder: (_, _, _) => const Icon(Icons.person, size: 48),
+                                )
+                              : Center(
+                                  child: Text(_avatar, style: const TextStyle(fontSize: 48)),
+                                ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
                     SizedBox(
-                      height: 50,
+                      height: 54,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: _avatars.length,
-                        separatorBuilder: (ctx, index) => const SizedBox(width: 6),
+                        separatorBuilder: (ctx, index) => const SizedBox(width: 8),
                         itemBuilder: (_, i) {
                           final a = _avatars[i];
                           final sel = a == _avatar;
@@ -331,19 +350,26 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                             onTap: () => setState(() => _avatar = a),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
-                              width: 46,
-                              height: 46,
+                              width: 54,
+                              height: 54,
+                              padding: const EdgeInsets.all(2),
                               decoration: BoxDecoration(
                                 color: sel
                                     ? AppColors.buttonBlue.withValues(alpha: 0.2)
                                     : AppColors.background,
                                 borderRadius: BorderRadius.circular(12),
                                 border: sel
-                                    ? Border.all(color: AppColors.buttonBlue, width: 2)
-                                    : null,
+                                    ? Border.all(color: AppColors.buttonBlue, width: 2.5)
+                                    : Border.all(color: Colors.black12),
                               ),
-                              child: Center(
-                                child: Text(a, style: const TextStyle(fontSize: 24)),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(9),
+                                child: Image.asset(
+                                  a,
+                                  fit: BoxFit.cover,
+                                  alignment: Alignment.topCenter,
+                                  errorBuilder: (_, _, _) => const Icon(Icons.person),
+                                ),
                               ),
                             ),
                           );
@@ -351,15 +377,51 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    _NeuTextField(ctrl: _nameCtrl, hint: 'Çocuğun adı', icon: Icons.child_care_rounded),
+                    _NeuTextField(
+                      ctrl: _nameCtrl,
+                      hint: 'Kullanıcının adı soyadı',
+                      icon: Icons.child_care_rounded,
+                      maxLength: 50,
+                      inputFormatters: [LengthLimitingTextInputFormatter(50)],
+                    ),
                     const SizedBox(height: 12),
-                    _NeuTextField(ctrl: _birthCtrl, hint: 'Doğum tarihi (YYYY-AA-GG)', icon: Icons.cake_rounded),
+                    _NeuTextField(
+                      ctrl: _birthCtrl,
+                      hint: 'Doğum tarihi (GG/AA/YYYY)',
+                      icon: Icons.cake_rounded,
+                      maxLength: 10,
+                      inputFormatters: [LengthLimitingTextInputFormatter(10)],
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Expanded(child: _NeuTextField(ctrl: _heightCtrl, hint: 'Boy (cm)', icon: Icons.straighten_rounded)),
+                        Expanded(
+                          child: _NeuTextField(
+                            ctrl: _heightCtrl,
+                            hint: 'Boy (cm)',
+                            icon: Icons.straighten_rounded,
+                            keyboardType: TextInputType.number,
+                            maxLength: 3,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(3),
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: 12),
-                        Expanded(child: _NeuTextField(ctrl: _weightCtrl, hint: 'Kilo (kg)', icon: Icons.monitor_weight_rounded)),
+                        Expanded(
+                          child: _NeuTextField(
+                            ctrl: _weightCtrl,
+                            hint: 'Kilo (kg)',
+                            icon: Icons.monitor_weight_rounded,
+                            keyboardType: TextInputType.number,
+                            maxLength: 3,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(3),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                     if (game.age.isNotEmpty) ...[
@@ -386,7 +448,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
                 title: '👨‍👩‍👧 Ebeveyn / Bakıcı',
                 child: Column(
                   children: [
-                    _NeuTextField(ctrl: _caregiverCtrl, hint: 'Ad Soyad', icon: Icons.person_outline_rounded),
+                    _NeuTextField(
+                      ctrl: _caregiverCtrl,
+                      hint: 'Ad Soyad',
+                      icon: Icons.person_outline_rounded,
+                      maxLength: 50,
+                      inputFormatters: [LengthLimitingTextInputFormatter(50)],
+                    ),
                     const SizedBox(height: 12),
                     SizedBox(
                       height: 42,
@@ -917,11 +985,17 @@ class _NeuTextField extends StatelessWidget {
   final TextEditingController ctrl;
   final String hint;
   final IconData icon;
+  final TextInputType keyboardType;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
 
   const _NeuTextField({
     required this.ctrl,
     required this.hint,
     required this.icon,
+    this.keyboardType = TextInputType.text,
+    this.maxLength,
+    this.inputFormatters,
   });
 
   @override
@@ -931,11 +1005,15 @@ class _NeuTextField extends StatelessWidget {
       decoration: Neu.elevated(radius: 16, blur: 6),
       child: TextField(
         controller: ctrl,
+        keyboardType: keyboardType,
+        maxLength: maxLength,
+        inputFormatters: inputFormatters,
         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
           border: InputBorder.none,
+          counterText: '',
           prefixIcon: Icon(icon, color: AppColors.buttonBlue, size: 22),
           isDense: true,
         ),

@@ -42,7 +42,7 @@ class OzelApp extends StatelessWidget {
               : (settings.buttonSize == 2 ? 1.25 : 1.05);
 
           return MaterialApp(
-            title: 'Özel İletişim & Yaşam Rehberi',
+            title: '+1 Bağımsız Yaşam Planım',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.getTheme(settings.themeIndex),
             builder: (context, child) {

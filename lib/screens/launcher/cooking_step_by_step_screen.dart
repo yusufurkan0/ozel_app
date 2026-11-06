@@ -329,7 +329,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                   child: Center(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: Image.asset(
+                      child: KitchenRecipe.buildImage(
                         imagePath,
                         fit: BoxFit.contain,
                       ),
@@ -685,7 +685,7 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                                       borderRadius: BorderRadius.circular(20),
                                       child: AspectRatio(
                                         aspectRatio: 1.25,
-                                        child: Image.asset(
+                                        child: KitchenRecipe.buildImage(
                                           currentStep.imagePath!,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, _, _) => Container(

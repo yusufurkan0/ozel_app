@@ -78,6 +78,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/avatars/
     - assets/images/lezzet/
     - assets/images/disaster_dict/
     - assets/sounds/

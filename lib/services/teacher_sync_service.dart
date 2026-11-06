@@ -77,6 +77,7 @@ class TeacherSyncService {
       list.addAll([
         'http://127.0.0.1:$defaultPort',
         'http://localhost:$defaultPort',
+        'http://192.168.1.100:$defaultPort',
         'http://192.168.1.103:$defaultPort',
       ]);
       return list.toSet().toList();
@@ -85,6 +86,7 @@ class TeacherSyncService {
     if (defaultTargetPlatform == TargetPlatform.android) {
       list.addAll([
         'http://10.0.2.2:$defaultPort',
+        'http://192.168.1.100:$defaultPort',
         'http://192.168.1.103:$defaultPort',
         'http://127.0.0.1:$defaultPort',
       ]);
@@ -92,6 +94,7 @@ class TeacherSyncService {
       list.addAll([
         'http://127.0.0.1:$defaultPort',
         'http://localhost:$defaultPort',
+        'http://192.168.1.100:$defaultPort',
         'http://192.168.1.103:$defaultPort',
       ]);
     }
@@ -129,7 +132,12 @@ class TeacherSyncService {
 
     try {
       final cleanAge = int.tryParse((age ?? '').replaceAll(RegExp(r'\D'), '')) ?? 14;
-      final docId = 'std_${cleanName.toLowerCase().replaceAll(RegExp(r'\s+'), '_')}';
+      final sanitizedSlug = cleanName
+          .toLowerCase()
+          .replaceAll(RegExp(r'''["'`<>\\/?#%\s]+'''), '_')
+          .replaceAll(RegExp(r'_+'), '_')
+          .replaceAll(RegExp(r'^_|_$'), '');
+      final docId = 'std_${sanitizedSlug.isNotEmpty ? sanitizedSlug : DateTime.now().millisecondsSinceEpoch}';
 
       final payload = {
         'id': docId,
@@ -266,6 +274,8 @@ class TeacherSyncService {
           prefs.getString('sos_child_name') ??
           prefs.getString('user_emergency_name') ??
           'Özel Öğrenci';
+      final avatar = prefs.getString('avatar') ?? 'assets/images/avatars/avatar_1.jpg';
+      final studentId = 'std_${childName.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_')}';
 
       final formattedAnswers = answers.entries.map((e) {
         return {
@@ -278,8 +288,9 @@ class TeacherSyncService {
       final evalId = 'eval_${now.millisecondsSinceEpoch}';
       final payload = {
         'id': evalId,
+        'studentId': studentId,
         'studentName': childName,
-        'studentAvatar': '🧒',
+        'studentAvatar': avatar,
         'formType': formType,
         'formTitle': formTitle,
         'mood': mood ?? 'Mutlu 😊',
@@ -366,10 +377,21 @@ class TeacherSyncService {
           result[k] = v['doubleValue'];
         } else if (v.containsKey('nullValue')) {
           result[k] = null;
+        } else if (v.containsKey('mapValue')) {
+          final mapFields = v['mapValue']['fields'] as Map<String, dynamic>? ?? {};
+          result[k] = _decodeFirestoreFields(mapFields);
         } else if (v.containsKey('arrayValue')) {
           final arr = v['arrayValue']['values'] as List? ?? [];
           result[k] = arr.map((item) {
-            if (item is Map && item.containsKey('stringValue')) return item['stringValue'];
+            if (item is Map) {
+              if (item.containsKey('stringValue')) return item['stringValue'];
+              if (item.containsKey('integerValue')) return int.tryParse(item['integerValue'].toString()) ?? 0;
+              if (item.containsKey('booleanValue')) return item['booleanValue'];
+              if (item.containsKey('mapValue')) {
+                final mf = item['mapValue']['fields'] as Map<String, dynamic>? ?? {};
+                return _decodeFirestoreFields(mf);
+              }
+            }
             return item.toString();
           }).toList();
         } else {
@@ -479,6 +501,85 @@ class TeacherSyncService {
       debugPrint('TeacherSyncService toggleTask Firestore hatası: $e');
     }
 
+    // 2. Yerel Ağ / Bilgisayar Sunucusunu Güncelle
+    try {
+      final urls = await _getCandidateUrls();
+      final localBody = jsonEncode({'id': taskId, 'isCompleted': isCompleted});
+      for (final baseUrl in urls) {
+        try {
+          final uri = Uri.parse('$baseUrl/api/tasks/toggle');
+          final resp = await httpClient
+              .post(
+                uri,
+                headers: {'Content-Type': 'application/json; charset=utf-8'},
+                body: localBody,
+              )
+              .timeout(const Duration(seconds: 3));
+          if (resp.statusCode == 200) {
+            anySuccess = true;
+            break;
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    if (client == null) {
+      httpClient.close();
+    }
+
     return anySuccess;
+  }
+
+  /// Web panelinden eklenen veya güncellenen mutfak tariflerini getir
+  Future<List<Map<String, dynamic>>> fetchRemoteRecipes({http.Client? client}) async {
+    final recipes = <Map<String, dynamic>>[];
+    final httpClient = client ?? http.Client();
+
+    try {
+      // 1. Firebase Firestore'dan çek
+      try {
+        final uri = Uri.parse(
+          'https://firestore.googleapis.com/v1/projects/$firestoreProjectId/databases/(default)/documents/recipes',
+        );
+        final resp = await httpClient.get(uri).timeout(const Duration(seconds: 4));
+        if (resp.statusCode == 200) {
+          final data = jsonDecode(resp.body) as Map<String, dynamic>;
+          final docs = data['documents'] as List? ?? [];
+          for (final doc in docs) {
+            final rawFields = doc['fields'] as Map<String, dynamic>? ?? {};
+            final rec = _decodeFirestoreFields(rawFields);
+            final docName = doc['name'] as String? ?? '';
+            rec['id'] = rec['id'] ?? docName.split('/').last;
+            recipes.add(rec);
+          }
+          if (recipes.isNotEmpty) return recipes;
+        }
+      } catch (e) {
+        debugPrint('TeacherSyncService fetchRemoteRecipes Firestore hatası: $e');
+      }
+
+      // 2. Yerel sunucudan çek
+      final urls = await _getCandidateUrls();
+      for (final baseUrl in urls) {
+        try {
+          final uri = Uri.parse('$baseUrl/api/recipes');
+          final resp = await httpClient.get(uri).timeout(const Duration(seconds: 3));
+          if (resp.statusCode == 200) {
+            final list = jsonDecode(resp.body) as List? ?? [];
+            for (final item in list) {
+              if (item is Map<String, dynamic>) {
+                recipes.add(Map<String, dynamic>.from(item));
+              }
+            }
+            if (recipes.isNotEmpty) return recipes;
+          }
+        } catch (_) {}
+      }
+    } finally {
+      if (client == null) {
+        httpClient.close();
+      }
+    }
+    return recipes;
   }
 }

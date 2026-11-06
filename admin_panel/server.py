@@ -4,7 +4,8 @@ import time
 import socket
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
+import urllib.request
 
 PORT = 8085
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -244,6 +245,13 @@ class LiveSyncHandler(SimpleHTTPRequestHandler):
             broadcast_event("recipes_updated", payload)
             self.wfile.write(json.dumps({"success": True, "recipe": payload}, ensure_ascii=False).encode("utf-8"))
 
+        elif path == "/api/recipes/delete":
+            target_id = payload.get("id")
+            db["recipes"] = [r for r in db.get("recipes", []) if r.get("id") != target_id]
+            save_database(db)
+            broadcast_event("recipes_updated", {"deletedId": target_id})
+            self.wfile.write(json.dumps({"success": True, "id": target_id}, ensure_ascii=False).encode("utf-8"))
+
         elif path == "/api/students":
             clean_name = (payload.get("name") or "").strip()
             if not clean_name:
@@ -274,12 +282,21 @@ class LiveSyncHandler(SimpleHTTPRequestHandler):
             target_id = payload.get("id")
             db["students"] = [s for s in db.get("students", []) if s.get("id") != target_id]
             save_database(db)
+            if target_id:
+                try:
+                    fs_url = f"https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/students/{quote(str(target_id), safe='')}"
+                    req = urllib.request.Request(fs_url, method="DELETE")
+                    urllib.request.urlopen(req, timeout=4)
+                except Exception:
+                    pass
             broadcast_event("student_deleted", {"id": target_id})
             self.wfile.write(json.dumps({"success": True, "id": target_id}, ensure_ascii=False).encode("utf-8"))
 
         elif path == "/api/reset-data":
             db["students"] = []
+            db["teachers"] = []
             db["evaluations"] = []
+            db["tasks"] = []
             save_database(db)
             broadcast_event("database_reset", {})
             self.wfile.write(json.dumps({"success": True}, ensure_ascii=False).encode("utf-8"))
@@ -292,6 +309,13 @@ class LiveSyncHandler(SimpleHTTPRequestHandler):
             broadcast_event("teacher_added", payload)
             self.wfile.write(json.dumps({"success": True, "teacher": payload}, ensure_ascii=False).encode("utf-8"))
 
+        elif path == "/api/teachers/delete":
+            target_id = payload.get("id")
+            db["teachers"] = [t for t in db.get("teachers", []) if t.get("id") != target_id]
+            save_database(db)
+            broadcast_event("teacher_deleted", {"id": target_id})
+            self.wfile.write(json.dumps({"success": True, "id": target_id}, ensure_ascii=False).encode("utf-8"))
+
         elif path == "/api/tasks":
             task_id = payload.get("id") or f"tsk_{int(time.time()*1000)}"
             payload["id"] = task_id
@@ -299,6 +323,26 @@ class LiveSyncHandler(SimpleHTTPRequestHandler):
             save_database(db)
             broadcast_event("task_added", payload)
             self.wfile.write(json.dumps({"success": True, "task": payload}, ensure_ascii=False).encode("utf-8"))
+
+        elif path == "/api/tasks/toggle":
+            target_id = payload.get("id")
+            is_completed = payload.get("isCompleted")
+            updated_task = None
+            for t in db.get("tasks", []):
+                if t.get("id") == target_id:
+                    t["isCompleted"] = bool(is_completed) if is_completed is not None else not t.get("isCompleted", False)
+                    updated_task = t
+                    break
+            save_database(db)
+            broadcast_event("task_updated", updated_task or {"id": target_id, "isCompleted": is_completed})
+            self.wfile.write(json.dumps({"success": True, "task": updated_task}, ensure_ascii=False).encode("utf-8"))
+
+        elif path == "/api/tasks/delete":
+            target_id = payload.get("id")
+            db["tasks"] = [t for t in db.get("tasks", []) if t.get("id") != target_id]
+            save_database(db)
+            broadcast_event("task_deleted", {"id": target_id})
+            self.wfile.write(json.dumps({"success": True, "id": target_id}, ensure_ascii=False).encode("utf-8"))
 
         else:
             self.wfile.write(json.dumps({"error": "Unknown POST route"}).encode("utf-8"))

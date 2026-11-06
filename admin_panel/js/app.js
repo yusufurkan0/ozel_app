@@ -113,7 +113,9 @@ function setupNavigation() {
 function navigateTo(viewName) {
   currentView = viewName;
   document.querySelectorAll('.nav-item').forEach((item) => {
-    item.classList.toggle('active', item.getAttribute('data-view') === viewName);
+    const itemView = item.getAttribute('data-view');
+    const isActive = itemView === viewName || (viewName === 'recipe-editor' && itemView === 'recipes');
+    item.classList.toggle('active', isActive);
   });
   document.querySelectorAll('.view-section').forEach((sec) => {
     sec.classList.toggle('active', sec.id === `view-${viewName}`);
@@ -181,6 +183,42 @@ function updateHeaderAndStats() {
 }
 
 // ------------------------------------------------------------
+// AVATAR YARDIMCI FONKSİYONLARI (Resim yolu veya Emoji desteği)
+// ------------------------------------------------------------
+function isImageAvatar(av) {
+  return typeof av === 'string' && (
+    av.startsWith('assets/') ||
+    av.startsWith('./assets/') ||
+    av.startsWith('/assets/') ||
+    av.startsWith('http') ||
+    /\.(jpg|jpeg|png|webp|svg)$/i.test(av)
+  );
+}
+
+function renderAvatarCircle(av, size = 52, bg = '#eff6ff', fallback = '🧒') {
+  const fontSize = Math.round(size * 0.54);
+  if (isImageAvatar(av)) {
+    const cleanPath = av.replace(/^\.?\//, '');
+    const src = av.startsWith('http') ? av : `./${cleanPath}`;
+    return `
+      <div style="width:${size}px; height:${size}px; min-width:${size}px; border-radius:50%; background:${bg}; display:flex; align-items:center; justify-content:center; overflow:hidden; border:2px solid #dbeafe; flex-shrink:0;">
+        <img src="${src}" alt="Avatar" style="width:100%; height:100%; object-fit:cover; object-position:top center; display:block;" onerror="this.parentElement.innerHTML='${fallback}'">
+      </div>
+    `;
+  }
+  return `
+    <div style="width:${size}px; height:${size}px; min-width:${size}px; border-radius:50%; background:${bg}; display:flex; align-items:center; justify-content:center; font-size:${fontSize}px; overflow:hidden; flex-shrink:0;">
+      ${av || fallback}
+    </div>
+  `;
+}
+
+function renderAvatarText(av, fallback = '🧒') {
+  if (!av || isImageAvatar(av)) return fallback;
+  return av;
+}
+
+// ------------------------------------------------------------
 // 1. GENEL BAKIŞ (OVERVIEW) GÖRÜNÜMÜ
 // ------------------------------------------------------------
 function renderOverviewView() {
@@ -244,7 +282,7 @@ function renderOverviewView() {
       <tr>
         <td>
           <div style="display:flex; align-items:center; gap:10px;">
-            <span style="font-size:22px;">${f.studentAvatar || '👦'}</span>
+            ${renderAvatarCircle(f.studentAvatar, 36, '#eff6ff', '👦')}
             <div>
               <strong>${f.studentName}</strong>
               <div style="font-size:12px; color:#64748b;">${f.mood || 'Genel'}</div>
@@ -312,7 +350,7 @@ function renderEvaluationsView() {
     <tr>
       <td>
         <div style="display:flex; align-items:center; gap:10px;">
-          <span style="font-size:24px;">${f.studentAvatar || '👦'}</span>
+          ${renderAvatarCircle(f.studentAvatar, 38, '#eff6ff', '👦')}
           <div>
             <strong>${f.studentName}</strong>
             <div style="font-size:12px; color:#64748b;">${f.mood || 'Belirtilmedi'}</div>
@@ -429,7 +467,7 @@ function renderRecipesView() {
   grid.innerHTML = recipes.map((r) => `
     <div class="recipe-card">
       <div class="recipe-image-wrap">
-        <img src="${r.imageUrl || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600'}" alt="${r.title}">
+        <img src="${r.imageUrl || r.coverImagePath || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600'}" alt="${r.title}">
         <div class="recipe-badge-top">${r.category}</div>
       </div>
       <div class="recipe-body">
@@ -452,6 +490,7 @@ function renderRecipesView() {
             ${r.isPublishedToApp ? '📱 Çocuk Ekranında Yayında' : '⏸️ Taslak'}
           </label>
           <div style="display:flex; gap:6px;">
+            <button class="btn btn-outline" style="padding:4px 8px;" onclick="editRecipe('${r.id}')">✏️ Düzenle</button>
             <button class="btn btn-outline" style="padding:4px 8px;" onclick="viewRecipeDetails('${r.id}')">📖 İncele</button>
             <button class="btn btn-danger-outline" style="padding:4px 8px;" onclick="deleteRecipe('${r.id}')">🗑️</button>
           </div>
@@ -486,12 +525,59 @@ window.viewRecipeDetails = function(id) {
   alert(`🍳 ${r.title}\nKategori: ${r.category}\nSüre: ${r.prepTime}\nZorluk: ${r.difficulty}\n\nMalzemeler (${(r.ingredients || []).length}):\n${(r.ingredients || []).join('\n')}\n\nAdım Sayısı: ${(r.steps || []).length} adım`);
 };
 
-// Tarif Ekleme Modalı
+// Görsel Sıkıştırma Yardımcısı (Bilgisayardan seçilen fotoğrafları hafif Base64 JPEG'e çevirir)
+function compressImageFile(file, maxW = 800, quality = 0.78) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width;
+        let h = img.height;
+        if (w > maxW) {
+          h = Math.round((h * maxW) / w);
+          w = maxW;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function escapeHtmlAttr(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Tarif Stüdyosu (Tam Ekran Yeni Tarif Ekleme / Düzenleme)
 window.openNewRecipeModal = function() {
   currentIngredientsList = [];
-  currentStepsList = [];
+  currentStepsList = [
+    {
+      order: 1,
+      title: '',
+      instruction: '',
+      voicePrompt: '',
+      timerMinutes: 3,
+      imageUrl: '',
+    },
+  ];
 
-  document.getElementById('recipeModalTitle').textContent = '🍳 Yeni Mutfak Tarifi Ekle';
+  const titleEl = document.getElementById('recipeEditorMainTitle');
+  if (titleEl) titleEl.textContent = '🍳 Yeni Mutfak Tarifi Oluştur';
+
   document.getElementById('recipeFormId').value = '';
   document.getElementById('recipeTitle').value = '';
   document.getElementById('recipeCategory').value = 'Çorbalar';
@@ -502,16 +588,107 @@ window.openNewRecipeModal = function() {
   document.getElementById('recipeImageUrl').value = '';
   document.getElementById('recipeDescription').value = '';
 
+  clearRecipeCoverImage();
   renderIngredientsChips();
   renderStepsInModal();
 
-  document.getElementById('recipeModal').classList.add('active');
+  navigateTo('recipe-editor');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+window.editRecipe = function(id) {
+  const r = dataService.getRecipeById(id);
+  if (!r) return;
+
+  const titleEl = document.getElementById('recipeEditorMainTitle');
+  if (titleEl) titleEl.textContent = `✏️ Tarifi Düzenle: ${r.title}`;
+
+  document.getElementById('recipeFormId').value = r.id;
+  document.getElementById('recipeTitle').value = r.title || '';
+  document.getElementById('recipeCategory').value = r.category || 'Çorbalar';
+  document.getElementById('recipeDifficulty').value = r.difficulty || 'Kolay';
+  document.getElementById('recipePrepTime').value = r.prepTime || '20 Dakika';
+  document.getElementById('recipeCookTime').value = r.cookTime || '20 Dakika';
+  document.getElementById('recipeServings').value = r.servings || r.portions || '4 Kişilik';
+  document.getElementById('recipeDescription').value = r.description || r.subtitle || '';
+
+  const coverUrl = r.imageUrl || r.coverImagePath || '';
+  document.getElementById('recipeImageUrl').value = coverUrl;
+  updateRecipeCoverPreviewFromUrl(coverUrl);
+
+  currentIngredientsList = Array.isArray(r.ingredients) ? [...r.ingredients] : [];
+  currentStepsList = Array.isArray(r.steps) && r.steps.length > 0
+    ? r.steps.map((s, idx) => ({
+        order: idx + 1,
+        title: s.title || '',
+        instruction: s.instruction || '',
+        voicePrompt: s.voicePrompt || s.instruction || '',
+        timerMinutes: typeof s.timerMinutes === 'number' ? s.timerMinutes : 0,
+        imageUrl: s.imageUrl || s.imagePath || '',
+      }))
+    : [
+        {
+          order: 1,
+          title: '',
+          instruction: '',
+          voicePrompt: '',
+          timerMinutes: 3,
+          imageUrl: '',
+        },
+      ];
+
+  renderIngredientsChips();
+  renderStepsInModal();
+
+  navigateTo('recipe-editor');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 window.closeRecipeModal = function() {
-  document.getElementById('recipeModal').classList.remove('active');
+  navigateTo('recipes');
 };
 
+// Kapak Görseli İşlemleri
+window.handleRecipeCoverUpload = async function(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  try {
+    const dataUrl = await compressImageFile(file, 900, 0.80);
+    document.getElementById('recipeImageUrl').value = dataUrl;
+    updateRecipeCoverPreviewFromUrl(dataUrl);
+    showToast('📸 Kapak Görseli Yüklendi', 'Tarif kapak fotoğrafı hazır.');
+  } catch (e) {
+    alert('Görsel yüklenirken bir hata oluştu.');
+  }
+  input.value = '';
+};
+
+window.updateRecipeCoverPreviewFromUrl = function(url) {
+  const imgEl = document.getElementById('recipeCoverPreviewImg');
+  const placeholderEl = document.getElementById('recipeCoverPlaceholder');
+  const clearBtn = document.getElementById('recipeCoverClearBtn');
+  const trimmed = (url || '').trim();
+
+  if (trimmed) {
+    imgEl.src = trimmed;
+    imgEl.style.display = 'block';
+    if (placeholderEl) placeholderEl.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'inline-flex';
+  } else {
+    imgEl.src = '';
+    imgEl.style.display = 'none';
+    if (placeholderEl) placeholderEl.style.display = 'block';
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+};
+
+window.clearRecipeCoverImage = function() {
+  const urlInput = document.getElementById('recipeImageUrl');
+  if (urlInput) urlInput.value = '';
+  updateRecipeCoverPreviewFromUrl('');
+};
+
+// Malzemeler İşlemleri
 window.addIngredient = function() {
   const input = document.getElementById('ingredientInput');
   const val = input.value.trim();
@@ -519,15 +696,29 @@ window.addIngredient = function() {
     currentIngredientsList.push(val);
     input.value = '';
     renderIngredientsChips();
+    input.focus();
+  }
+};
+
+window.quickAddIngredient = function(text) {
+  if (!text) return;
+  if (!currentIngredientsList.includes(text)) {
+    currentIngredientsList.push(text);
+    renderIngredientsChips();
   }
 };
 
 function renderIngredientsChips() {
   const container = document.getElementById('ingredientsChipsContainer');
+  if (!container) return;
+  if (currentIngredientsList.length === 0) {
+    container.innerHTML = `<span style="font-size:13px; color:#94a3b8; font-style:italic;">Henüz malzeme eklenmedi. Yukarıdan yazıp "+ Listeye Ekle" butonuna basın.</span>`;
+    return;
+  }
   container.innerHTML = currentIngredientsList.map((ing, i) => `
-    <span class="status-badge published" style="display:inline-flex; align-items:center; gap:6px; margin:3px;">
-      ${ing}
-      <span style="cursor:pointer; font-weight:bold;" onclick="removeIngredient(${i})">&times;</span>
+    <span class="status-badge published" style="display:inline-flex; align-items:center; gap:8px; padding:6px 12px; font-size:13px;">
+      🥗 ${escapeHtmlAttr(ing)}
+      <span style="cursor:pointer; font-weight:bold; font-size:15px;" onclick="removeIngredient(${i})" title="Kaldır">&times;</span>
     </span>
   `).join('');
 }
@@ -537,53 +728,203 @@ window.removeIngredient = function(index) {
   renderIngredientsChips();
 };
 
+// Aşamalar (Adım Adım Görselli Kartlar) İşlemleri
 window.addStepToRecipe = function() {
-  const title = prompt('Adım Başlığı (Örn: Domatesleri Yıka):');
-  if (!title) return;
-  const instruction = prompt('Açıklama (Çocuğun göreceği metin):', title);
-  const voice = prompt('Sesli Yönerge Metni (Robotun okuyacağı cümle):', instruction);
-  const timer = parseInt(prompt('Süre Sayacı (Dakika):', '3') || '0', 10);
-
   currentStepsList.push({
     order: currentStepsList.length + 1,
-    title: title,
-    instruction: instruction,
-    voicePrompt: voice,
-    timerMinutes: timer,
+    title: '',
+    instruction: '',
+    voicePrompt: '',
+    timerMinutes: 3,
+    imageUrl: '',
   });
+  renderStepsInModal();
+};
 
+window.updateStepField = function(idx, field, value) {
+  if (!currentStepsList[idx]) return;
+  if (field === 'timerMinutes') {
+    currentStepsList[idx].timerMinutes = Math.max(0, parseInt(value || '0', 10) || 0);
+  } else {
+    currentStepsList[idx][field] = value;
+  }
+};
+
+window.handleStepImageUpload = async function(idx, input) {
+  const file = input.files && input.files[0];
+  if (!file || !currentStepsList[idx]) return;
+  try {
+    const dataUrl = await compressImageFile(file, 800, 0.78);
+    currentStepsList[idx].imageUrl = dataUrl;
+    renderStepsInModal();
+    showToast(`📷 ${idx + 1}. Aşama Görseli Eklendi`, 'Aşama fotoğrafı başarıyla yüklendi.');
+  } catch (e) {
+    alert('Aşama görseli yüklenirken hata oluştu.');
+  }
+  input.value = '';
+};
+
+window.updateStepImageUrl = function(idx, url) {
+  if (!currentStepsList[idx]) return;
+  currentStepsList[idx].imageUrl = (url || '').trim();
+  renderStepsInModal();
+};
+
+window.clearStepImage = function(idx) {
+  if (!currentStepsList[idx]) return;
+  currentStepsList[idx].imageUrl = '';
+  renderStepsInModal();
+};
+
+window.moveStep = function(idx, direction) {
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= currentStepsList.length) return;
+  const temp = currentStepsList[idx];
+  currentStepsList[idx] = currentStepsList[targetIdx];
+  currentStepsList[targetIdx] = temp;
+  currentStepsList.forEach((s, i) => {
+    s.order = i + 1;
+  });
+  renderStepsInModal();
+};
+
+window.removeStep = function(idx) {
+  currentStepsList.splice(idx, 1);
+  currentStepsList.forEach((s, i) => {
+    s.order = i + 1;
+  });
   renderStepsInModal();
 };
 
 function renderStepsInModal() {
   const container = document.getElementById('stepsContainerInModal');
+  if (!container) return;
+
   if (currentStepsList.length === 0) {
-    container.innerHTML = `<p style="font-size:13px; color:#94a3b8; font-style:italic;">Henüz adım eklenmedi.</p>`;
+    container.innerHTML = `
+      <div style="text-align:center; padding:32px; background:#f8fafc; border:2px dashed #cbd5e1; border-radius:14px; color:#64748b;">
+        <div style="font-size:36px; margin-bottom:8px;">👩‍🍳</div>
+        <div style="font-weight:700; color:#334155; margin-bottom:4px;">Henüz Hazırlanış Aşaması Eklenmedi</div>
+        <div style="font-size:13px; margin-bottom:14px;">Aşağıdaki veya sağ üstteki <strong>"+ Yeni Aşama Kartı Ekle"</strong> butonuna tıklayarak görselli aşamaları oluşturun.</div>
+      </div>
+    `;
     return;
   }
 
-  container.innerHTML = currentStepsList.map((s, idx) => `
-    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-      <div>
-        <strong>${idx + 1}. ${s.title}</strong>
-        <div style="font-size:12px; color:#64748b;">${s.instruction} | ⏱️ ${s.timerMinutes || 0} dk | 🔊 "${s.voicePrompt}"</div>
-      </div>
-      <button class="btn btn-danger-outline" style="padding:2px 8px; font-size:11px;" onclick="removeStep(${idx})">Kaldır</button>
-    </div>
-  `).join('');
-}
+  container.innerHTML = currentStepsList.map((s, idx) => {
+    const hasImg = Boolean(s.imageUrl && s.imageUrl.trim());
+    const isDataUrl = hasImg && s.imageUrl.startsWith('data:image');
+    const urlInputValue = isDataUrl ? '' : escapeHtmlAttr(s.imageUrl || '');
 
-window.removeStep = function(idx) {
-  currentStepsList.splice(idx, 1);
-  renderStepsInModal();
-};
+    return `
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+        <!-- Aşama Üst Başlık Çubuğu -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #e2e8f0;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="background:#2563eb; color:#fff; font-weight:800; font-size:13px; padding:5px 12px; border-radius:999px;">
+              ${idx + 1}. AŞAMA
+            </span>
+            <span style="font-size:13px; color:#64748b; font-weight:600;">
+              ${s.title ? escapeHtmlAttr(s.title) : 'Aşama detaylarını ve görselini aşağıdan girin'}
+            </span>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="moveStep(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} title="Yukarı Taşı">⬆️ Yukarı</button>
+            <button type="button" class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="moveStep(${idx}, 1)" ${idx === currentStepsList.length - 1 ? 'disabled' : ''} title="Aşağı Taşı">⬇️ Aşağı</button>
+            <button type="button" class="btn btn-danger-outline" style="padding:4px 10px; font-size:12px;" onclick="removeStep(${idx})">🗑️ Aşamayı Sil</button>
+          </div>
+        </div>
+
+        <!-- Aşama İçerik Grid: Sol Görsel Kutusu | Sağ Form Alanları -->
+        <div style="display:grid; grid-template-columns: 240px 1fr; gap:18px; align-items:start;">
+          <!-- Sol: Aşama Görseli -->
+          <div style="background:#ffffff; border:2px dashed #cbd5e1; border-radius:12px; padding:12px; text-align:center;">
+            <div style="width:100%; height:135px; border-radius:8px; overflow:hidden; background:#f1f5f9; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
+              ${
+                hasImg
+                  ? `<img src="${escapeHtmlAttr(s.imageUrl)}" alt="${idx + 1}. Aşama" style="width:100%; height:100%; object-fit:cover;">`
+                  : `<div style="color:#94a3b8; font-size:12px; padding:8px;">
+                      <div style="font-size:28px; margin-bottom:4px;">📷</div>
+                      <div>${idx + 1}. Aşama Görseli Yok</div>
+                    </div>`
+              }
+            </div>
+            <input type="file" id="stepFileInput_${idx}" accept="image/*" style="display:none;" onchange="handleStepImageUpload(${idx}, this)">
+            <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-bottom:8px;">
+              <button type="button" class="btn btn-outline" style="font-size:12px; padding:5px 10px; width:100%;" onclick="document.getElementById('stepFileInput_${idx}').click()">
+                📁 Bilgisayardan Görsel Seç
+              </button>
+              ${
+                hasImg
+                  ? `<button type="button" class="btn btn-danger-outline" style="font-size:11px; padding:4px 8px; width:100%;" onclick="clearStepImage(${idx})">🗑️ Görseli Kaldır</button>`
+                  : ''
+              }
+            </div>
+            <input type="text" class="form-input" style="font-size:11px; padding:6px 8px;" placeholder="veya Görsel URL yapıştırın..." value="${urlInputValue}" onchange="updateStepImageUrl(${idx}, this.value)">
+          </div>
+
+          <!-- Sağ: Aşama Başlığı, Açıklama, Sesli Okuma ve Süre -->
+          <div>
+            <div class="form-row" style="margin-bottom:10px;">
+              <div class="form-group" style="margin-bottom:0; flex:2;">
+                <label style="font-size:12px;">Aşama Başlığı (Örn: Sebzeleri Yıkayalım):</label>
+                <input type="text" class="form-input" placeholder="Örn: ${idx + 1}. Adım: Malzemeleri Kaseye Koyalım" value="${escapeHtmlAttr(s.title)}" oninput="updateStepField(${idx}, 'title', this.value)">
+              </div>
+              <div class="form-group" style="margin-bottom:0; flex:1; max-width:160px;">
+                <label style="font-size:12px;">⏱️ Süre Sayacı (Dk):</label>
+                <input type="number" min="0" max="180" class="form-input" value="${s.timerMinutes || 0}" oninput="updateStepField(${idx}, 'timerMinutes', this.value)">
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:10px;">
+              <label style="font-size:12px;">👩‍🍳 Çocuğun Ekranda Göreceği Açıklama Metni:</label>
+              <textarea class="form-textarea" rows="2" placeholder="Bu aşamada ne yapılacağını açık ve anlaşılır bir dille yazın..." oninput="updateStepField(${idx}, 'instruction', this.value)">${escapeHtmlAttr(s.instruction)}</textarea>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <label style="font-size:12px;">🔊 Sesli Asistan Okuma Metni (Boş bırakılırsa üstteki açıklama seslendirilir):</label>
+              <input type="text" class="form-input" placeholder="Robotun çocuğa sesli okuyacağı yönerge..." value="${escapeHtmlAttr(s.voicePrompt)}" oninput="updateStepField(${idx}, 'voicePrompt', this.value)">
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 window.saveRecipeForm = function() {
   const title = document.getElementById('recipeTitle').value.trim();
   if (!title) {
     alert('Lütfen tarif başlığını girin.');
+    document.getElementById('recipeTitle').focus();
     return;
   }
+
+  // Geçerli aşamaları filtrele ve düzenle
+  const cleanedSteps = currentStepsList
+    .filter((s) => (s.title && s.title.trim()) || (s.instruction && s.instruction.trim()) || (s.imageUrl && s.imageUrl.trim()))
+    .map((s, idx) => {
+      const stepTitle = (s.title || '').trim() || `${idx + 1}. Aşama`;
+      const stepInstruction = (s.instruction || '').trim() || stepTitle;
+      return {
+        order: idx + 1,
+        title: stepTitle,
+        instruction: stepInstruction,
+        voicePrompt: (s.voicePrompt || '').trim() || stepInstruction,
+        timerMinutes: typeof s.timerMinutes === 'number' ? s.timerMinutes : 0,
+        imageUrl: (s.imageUrl || '').trim(),
+        imagePath: (s.imageUrl || '').trim(),
+      };
+    });
+
+  if (cleanedSteps.length === 0) {
+    alert('Lütfen en az 1 hazırlanış aşaması (başlık veya açıklama) girin.');
+    return;
+  }
+
+  const coverImg = document.getElementById('recipeImageUrl').value.trim() ||
+    cleanedSteps.find((s) => s.imageUrl)?.imageUrl ||
+    'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600';
 
   const recipe = {
     id: document.getElementById('recipeFormId').value || 'rec_' + Date.now(),
@@ -594,17 +935,17 @@ window.saveRecipeForm = function() {
     cookTime: document.getElementById('recipeCookTime').value,
     servings: document.getElementById('recipeServings').value,
     portions: document.getElementById('recipeServings').value,
-    imageUrl: document.getElementById('recipeImageUrl').value || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600',
-    description: document.getElementById('recipeDescription').value,
+    imageUrl: coverImg,
+    coverImagePath: coverImg,
+    description: document.getElementById('recipeDescription').value.trim() || 'Resimli ve sesli adım adım mutfak tarifi.',
     ingredients: currentIngredientsList.length > 0 ? currentIngredientsList : ['Temel Malzemeler'],
-    steps: currentStepsList.length > 0 ? currentStepsList : [{ order: 1, title: 'Hazırlık', instruction: 'Malzemeleri hazırla.', timerMinutes: 5 }],
+    steps: cleanedSteps,
     isPublishedToApp: true,
   };
 
   dataService.saveRecipe(recipe);
-  showToast('🎉 Tarif Kaydedildi!', `"${recipe.title}" mutfak kütüphanesine eklendi.`);
-  closeRecipeModal();
-  renderRecipesView();
+  showToast('🎉 Tarif Kaydedildi!', `"${recipe.title}" (${cleanedSteps.length} aşamalı) mutfak kütüphanesine eklendi ve çocuk ekranına gönderildi.`);
+  navigateTo('recipes');
 };
 
 // ------------------------------------------------------------
@@ -685,7 +1026,7 @@ window.openNewTaskModal = function() {
     return;
   }
 
-  select.innerHTML = students.map((s) => `<option value="${s.id}">${s.avatar || '🧒'} ${s.name} (${s.diagnosis || 'Öğrenci'})</option>`).join('');
+  select.innerHTML = students.map((s) => `<option value="${s.id}">${renderAvatarText(s.avatar, '🧒')} ${s.name} (${s.diagnosis || 'Öğrenci'})</option>`).join('');
 
   document.getElementById('taskTitle').value = '';
   document.getElementById('taskDueDate').value = 'Bugün, 20:00';
@@ -752,11 +1093,9 @@ function renderStudentsView() {
     <div class="card-panel" style="padding:20px; display:flex; flex-direction:column; justify-content:space-between;">
       <div>
         <div style="display:flex; align-items:center; gap:14px; margin-bottom:12px;">
-          <div style="width:52px; height:52px; border-radius:50%; background:#eff6ff; display:flex; align-items:center; justify-content:center; font-size:28px;">
-            ${s.avatar || '🧒'}
-          </div>
-          <div>
-            <h4 style="font-family:var(--font-heading); font-size:17px; font-weight:700;">${s.name}</h4>
+          ${renderAvatarCircle(s.avatar, 52, '#eff6ff', '🧒')}
+          <div style="min-width:0; flex:1;">
+            <h4 style="font-family:var(--font-heading); font-size:17px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.name}</h4>
             <div style="font-size:12px; color:#64748b;">${s.age ? s.age + ' Yaşında | ' : ''}${s.diagnosis || 'Özel Gereksinim'}</div>
           </div>
         </div>
@@ -769,10 +1108,10 @@ function renderStudentsView() {
       </div>
 
       <div style="display:flex; gap:8px;">
-        <button class="btn btn-primary" style="flex:1; font-size:12px;" onclick="openNewTaskForStudent('${s.id}')">
+        <button class="btn btn-primary" style="flex:1; font-size:12px;" data-student-id="${encodeURIComponent(s.id)}" onclick="openNewTaskForStudent(decodeURIComponent(this.getAttribute('data-student-id')))">
           🎯 Görev Ata
         </button>
-        <button class="btn btn-danger-outline" style="font-size:12px;" onclick="deleteStudent('${s.id}')">
+        <button class="btn btn-danger-outline" style="font-size:12px;" data-student-id="${encodeURIComponent(s.id)}" onclick="deleteStudent(decodeURIComponent(this.getAttribute('data-student-id')))">
           🗑️ Sil
         </button>
       </div>
@@ -822,10 +1161,10 @@ window.saveStudentForm = function() {
   renderCurrentView();
 };
 
-window.deleteStudent = function(id) {
+window.deleteStudent = async function(id) {
   if (confirm('Bu öğrenciyi silmek istediğinize emin misiniz?')) {
-    dataService.deleteStudent(id);
-    showToast('Öğrenci Silindi', 'Kayıt kaldırıldı.');
+    await dataService.deleteStudent(id);
+    showToast('🗑️ Öğrenci Silindi', 'Öğrenci kaydı buluttan ve panelden kaldırıldı.');
     renderCurrentView();
   }
 };
@@ -877,7 +1216,7 @@ function renderTeachersView() {
         <div style="border-top:1px solid #f1f5f9; padding-top:12px; margin-top:12px;">
           <strong style="font-size:13px; color:#334155;">Sorumlu Olduğu Öğrenciler (${assigned.length}):</strong>
           <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
-            ${assigned.length > 0 ? assigned.map((s) => `<span class="status-badge published">${s.avatar || '🧒'} ${s.name}</span>`).join('') : '<em style="font-size:12px; color:#94a3b8;">Henüz öğrenci atanmadı</em>'}
+            ${assigned.length > 0 ? assigned.map((s) => `<span class="status-badge published" style="display:inline-flex; align-items:center; gap:6px;">${renderAvatarText(s.avatar, '🧒')} ${s.name}</span>`).join('') : '<em style="font-size:12px; color:#94a3b8;">Henüz öğrenci atanmadı</em>'}
           </div>
         </div>
       </div>
