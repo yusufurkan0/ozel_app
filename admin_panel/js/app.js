@@ -649,16 +649,22 @@ window.editRecipe = function(id) {
   document.getElementById('recipeImageUrl').value = coverUrl;
   updateRecipeCoverPreviewFromUrl(coverUrl);
 
+  const isBuiltInBookRecipe = Boolean(r.id && !r.id.startsWith('rec_'));
   currentIngredientsList = Array.isArray(r.ingredients) ? [...r.ingredients] : [];
   currentStepsList = Array.isArray(r.steps) && r.steps.length > 0
-    ? r.steps.map((s, idx) => ({
-        order: idx + 1,
-        title: s.title || '',
-        instruction: s.instruction || '',
-        voicePrompt: s.voicePrompt || s.instruction || '',
-        timerMinutes: typeof s.timerMinutes === 'number' ? s.timerMinutes : 0,
-        imageUrl: s.imageUrl || s.imagePath || '',
-      }))
+    ? r.steps.map((s, idx) => {
+        const defaultStepImg = isBuiltInBookRecipe
+          ? `assets/images/lezzet/step_${r.id}_${idx + 1}.jpg`
+          : '';
+        return {
+          order: idx + 1,
+          title: s.title || `${idx + 1}. Aşama`,
+          instruction: s.instruction || '',
+          voicePrompt: s.voicePrompt || s.instruction || '',
+          timerMinutes: typeof s.timerMinutes === 'number' ? s.timerMinutes : 0,
+          imageUrl: s.imageUrl || s.imagePath || defaultStepImg,
+        };
+      })
     : [
         {
           order: 1,
