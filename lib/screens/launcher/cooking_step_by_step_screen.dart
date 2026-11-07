@@ -683,11 +683,14 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                                     ),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(20),
-                                      child: AspectRatio(
-                                        aspectRatio: 1.25,
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          minHeight: 240,
+                                          maxHeight: MediaQuery.of(context).size.height * 0.44,
+                                        ),
                                         child: KitchenRecipe.buildImage(
                                           currentStep.imagePath!,
-                                          fit: BoxFit.cover,
+                                          fit: BoxFit.contain,
                                           errorBuilder: (_, _, _) => Container(
                                             height: 180,
                                             alignment: Alignment.center,

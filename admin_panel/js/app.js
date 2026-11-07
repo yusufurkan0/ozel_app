@@ -884,10 +884,10 @@ function renderStepsInModal() {
         <div style="display:grid; grid-template-columns: 240px 1fr; gap:18px; align-items:start;">
           <!-- Sol: Aşama Görseli -->
           <div style="background:#ffffff; border:2px dashed #cbd5e1; border-radius:12px; padding:12px; text-align:center;">
-            <div style="width:100%; height:135px; border-radius:8px; overflow:hidden; background:#f1f5f9; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
+            <div style="width:100%; height:165px; border-radius:8px; overflow:hidden; background:#ffffff; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
               ${
                 hasImg
-                  ? `<img src="${escapeHtmlAttr(s.imageUrl)}" data-asset-path="${escapeHtmlAttr(s.imageUrl)}" onerror="handleRecipeImgError(this)" alt="${idx + 1}. Aşama" style="width:100%; height:100%; object-fit:cover;">`
+                  ? `<img src="${escapeHtmlAttr(s.imageUrl)}" data-asset-path="${escapeHtmlAttr(s.imageUrl)}" onerror="handleRecipeImgError(this)" alt="${idx + 1}. Aşama" style="width:100%; height:100%; object-fit:contain;">`
                   : `<div style="color:#94a3b8; font-size:12px; padding:8px;">
                       <div style="font-size:28px; margin-bottom:4px;">📷</div>
                       <div>${idx + 1}. Aşama Görseli Yok</div>
