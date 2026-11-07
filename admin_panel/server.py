@@ -80,6 +80,16 @@ class LiveSyncHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=BASE_DIR, **kwargs)
 
+    def translate_path(self, path):
+        local_path = super().translate_path(path)
+        if not os.path.exists(local_path):
+            parsed_path = urlparse(path).path.lstrip("/")
+            if parsed_path.startswith("assets/"):
+                root_asset_path = os.path.join(os.path.dirname(BASE_DIR), parsed_path.replace("/", os.sep))
+                if os.path.exists(root_asset_path):
+                    return root_asset_path
+        return local_path
+
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")

@@ -455,6 +455,36 @@ window.copyReportForParent = function() {
 // ------------------------------------------------------------
 // 3. MUTFAK & TARİF SİHİRBAZI (RECIPES - LEZZET +1 KİTABI)
 // ------------------------------------------------------------
+const OLD_SALAD_PLACEHOLDER = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600';
+
+function getRecipeCoverSrc(r) {
+  if (!r) return OLD_SALAD_PLACEHOLDER;
+  if (r.imageUrl && r.imageUrl !== OLD_SALAD_PLACEHOLDER) {
+    return r.imageUrl;
+  }
+  if (r.coverImagePath) {
+    return r.coverImagePath;
+  }
+  if (r.id && !r.id.startsWith('rec_')) {
+    return `assets/images/lezzet/cover_${r.id}.jpg`;
+  }
+  return r.imageUrl || OLD_SALAD_PLACEHOLDER;
+}
+
+window.handleRecipeImgError = function(img) {
+  const rawPath = img.getAttribute('data-asset-path') || '';
+  if (!img.dataset.triedParent && rawPath.startsWith('assets/')) {
+    img.dataset.triedParent = '1';
+    img.src = '../' + rawPath;
+    return;
+  }
+  if (!img.dataset.triedGithub && rawPath.startsWith('assets/')) {
+    img.dataset.triedGithub = '1';
+    img.src = 'https://raw.githubusercontent.com/yusufurkan0/ozel_app/main/' + rawPath;
+    return;
+  }
+};
+
 function renderRecipesView() {
   const recipes = dataService.getRecipes();
   const grid = document.getElementById('recipesGrid');
@@ -464,10 +494,12 @@ function renderRecipesView() {
     return;
   }
 
-  grid.innerHTML = recipes.map((r) => `
+  grid.innerHTML = recipes.map((r) => {
+    const coverSrc = getRecipeCoverSrc(r);
+    return `
     <div class="recipe-card">
       <div class="recipe-image-wrap">
-        <img src="${r.imageUrl || r.coverImagePath || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600'}" alt="${r.title}">
+        <img src="${escapeHtmlAttr(coverSrc)}" data-asset-path="${escapeHtmlAttr(coverSrc)}" onerror="handleRecipeImgError(this)" alt="${escapeHtmlAttr(r.title)}">
         <div class="recipe-badge-top">${r.category}</div>
       </div>
       <div class="recipe-body">
@@ -497,7 +529,8 @@ function renderRecipesView() {
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 window.toggleRecipePublish = function(id) {
@@ -612,7 +645,7 @@ window.editRecipe = function(id) {
   document.getElementById('recipeServings').value = r.servings || r.portions || '4 Kişilik';
   document.getElementById('recipeDescription').value = r.description || r.subtitle || '';
 
-  const coverUrl = r.imageUrl || r.coverImagePath || '';
+  const coverUrl = getRecipeCoverSrc(r);
   document.getElementById('recipeImageUrl').value = coverUrl;
   updateRecipeCoverPreviewFromUrl(coverUrl);
 
@@ -670,6 +703,12 @@ window.updateRecipeCoverPreviewFromUrl = function(url) {
   const trimmed = (url || '').trim();
 
   if (trimmed) {
+    delete imgEl.dataset.triedParent;
+    delete imgEl.dataset.triedGithub;
+    imgEl.setAttribute('data-asset-path', trimmed);
+    imgEl.onerror = function() {
+      handleRecipeImgError(this);
+    };
     imgEl.src = trimmed;
     imgEl.style.display = 'block';
     if (placeholderEl) placeholderEl.style.display = 'none';
@@ -842,7 +881,7 @@ function renderStepsInModal() {
             <div style="width:100%; height:135px; border-radius:8px; overflow:hidden; background:#f1f5f9; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
               ${
                 hasImg
-                  ? `<img src="${escapeHtmlAttr(s.imageUrl)}" alt="${idx + 1}. Aşama" style="width:100%; height:100%; object-fit:cover;">`
+                  ? `<img src="${escapeHtmlAttr(s.imageUrl)}" data-asset-path="${escapeHtmlAttr(s.imageUrl)}" onerror="handleRecipeImgError(this)" alt="${idx + 1}. Aşama" style="width:100%; height:100%; object-fit:cover;">`
                   : `<div style="color:#94a3b8; font-size:12px; padding:8px;">
                       <div style="font-size:28px; margin-bottom:4px;">📷</div>
                       <div>${idx + 1}. Aşama Görseli Yok</div>

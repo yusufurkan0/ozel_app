@@ -75,7 +75,7 @@ class PanelDataService {
             snapshot.forEach((doc) => {
               const data = doc.data();
               data.id = doc.id;
-              list.push(data);
+              list.push(this._normalizeRecipe(data));
             });
             list.sort((a, b) => (a.number || 0) - (b.number || 0));
             this.recipes = list;
@@ -249,7 +249,7 @@ class PanelDataService {
         this.forms = resEval;
       }
       if (this.recipes.length === 0 && Array.isArray(resRec) && resRec.length > 0) {
-        this.recipes = resRec;
+        this.recipes = resRec.map((r) => this._normalizeRecipe(r));
       }
       this.tasks = Array.isArray(resTsk) ? resTsk : [];
 
@@ -444,6 +444,36 @@ class PanelDataService {
   }
 
   // Tarifler
+  _normalizeRecipe(r) {
+    if (!r) return r;
+    const oldPlaceholder = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=600';
+    if ((!r.imageUrl || r.imageUrl === oldPlaceholder) && r.coverImagePath) {
+      r.imageUrl = r.coverImagePath;
+    } else if ((!r.imageUrl || r.imageUrl === oldPlaceholder) && r.id && !r.id.startsWith('rec_')) {
+      r.coverImagePath = `assets/images/lezzet/cover_${r.id}.jpg`;
+      r.imageUrl = r.coverImagePath;
+    }
+    if (r.description === 'Temel Reis\\' || r.subtitle === 'Temel Reis\\') {
+      const fullSub = "Temel Reis'in vazgeçilmez enerji deposu olan ıspanakla hem lezzetli hem de besleyici enfes bir çorba!";
+      r.description = fullSub;
+      r.subtitle = fullSub;
+    }
+    const isLezzetBook = Boolean(
+      (r.coverImagePath && r.coverImagePath.includes('assets/images/lezzet/')) ||
+      (r.imageUrl && r.imageUrl.includes('assets/images/lezzet/'))
+    );
+    if (isLezzetBook && Array.isArray(r.steps)) {
+      r.steps = r.steps.map((s, idx) => {
+        const stepImg = s.imageUrl || s.imagePath || `assets/images/lezzet/step_${r.id}_${idx + 1}.jpg`;
+        return Object.assign({}, s, {
+          imageUrl: stepImg,
+          imagePath: stepImg,
+        });
+      });
+    }
+    return r;
+  }
+
   getRecipes() {
     return this.recipes;
   }
