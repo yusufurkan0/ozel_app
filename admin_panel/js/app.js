@@ -862,14 +862,14 @@ function renderStepsInModal() {
     const urlInputValue = isDataUrl ? '' : escapeHtmlAttr(s.imageUrl || '');
 
     return `
-      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; padding:20px; box-shadow:0 2px 6px rgba(0,0,0,0.04);">
         <!-- Aşama Üst Başlık Çubuğu -->
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #e2e8f0;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            <span style="background:#2563eb; color:#fff; font-weight:800; font-size:13px; padding:5px 12px; border-radius:999px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid #e2e8f0; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <span style="background:#2563eb; color:#fff; font-weight:800; font-size:14px; padding:6px 14px; border-radius:999px;">
               ${idx + 1}. AŞAMA
             </span>
-            <span style="font-size:13px; color:#64748b; font-weight:600;">
+            <span style="font-size:14px; color:#334155; font-weight:700;">
               ${s.title ? escapeHtmlAttr(s.title) : 'Aşama detaylarını ve görselini aşağıdan girin'}
             </span>
           </div>
@@ -880,23 +880,23 @@ function renderStepsInModal() {
           </div>
         </div>
 
-        <!-- Aşama İçerik Grid: Sol Görsel Kutusu | Sağ Form Alanları -->
-        <div style="display:grid; grid-template-columns: 240px 1fr; gap:18px; align-items:start;">
+        <!-- Aşama İçerik Grid: Sol Geniş Görsel Kutusu | Sağ Büyük Form Alanları -->
+        <div style="display:grid; grid-template-columns: 320px 1fr; gap:20px; align-items:start;">
           <!-- Sol: Aşama Görseli -->
-          <div style="background:#ffffff; border:2px dashed #cbd5e1; border-radius:12px; padding:12px; text-align:center;">
-            <div style="width:100%; height:165px; border-radius:8px; overflow:hidden; background:#ffffff; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
+          <div style="background:#ffffff; border:2px dashed #cbd5e1; border-radius:14px; padding:12px; text-align:center;">
+            <div style="width:100%; min-height:180px; border-radius:10px; overflow:hidden; background:#ffffff; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
               ${
                 hasImg
-                  ? `<img src="${escapeHtmlAttr(s.imageUrl)}" data-asset-path="${escapeHtmlAttr(s.imageUrl)}" onerror="handleRecipeImgError(this)" alt="${idx + 1}. Aşama" style="width:100%; height:100%; object-fit:contain;">`
-                  : `<div style="color:#94a3b8; font-size:12px; padding:8px;">
-                      <div style="font-size:28px; margin-bottom:4px;">📷</div>
+                  ? `<img src="${escapeHtmlAttr(s.imageUrl)}" data-asset-path="${escapeHtmlAttr(s.imageUrl)}" onerror="handleRecipeImgError(this)" alt="${idx + 1}. Aşama" style="width:100%; height:auto; max-height:240px; object-fit:contain; display:block;">`
+                  : `<div style="color:#94a3b8; font-size:13px; padding:12px;">
+                      <div style="font-size:32px; margin-bottom:4px;">📷</div>
                       <div>${idx + 1}. Aşama Görseli Yok</div>
                     </div>`
               }
             </div>
             <input type="file" id="stepFileInput_${idx}" accept="image/*" style="display:none;" onchange="handleStepImageUpload(${idx}, this)">
             <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-bottom:8px;">
-              <button type="button" class="btn btn-outline" style="font-size:12px; padding:5px 10px; width:100%;" onclick="document.getElementById('stepFileInput_${idx}').click()">
+              <button type="button" class="btn btn-outline" style="font-size:12px; padding:6px 10px; width:100%;" onclick="document.getElementById('stepFileInput_${idx}').click()">
                 📁 Bilgisayardan Görsel Seç
               </button>
               ${
@@ -910,25 +910,25 @@ function renderStepsInModal() {
 
           <!-- Sağ: Aşama Başlığı, Açıklama, Sesli Okuma ve Süre -->
           <div>
-            <div class="form-row" style="margin-bottom:10px;">
+            <div class="form-row" style="margin-bottom:12px;">
               <div class="form-group" style="margin-bottom:0; flex:2;">
-                <label style="font-size:12px;">Aşama Başlığı (Örn: Sebzeleri Yıkayalım):</label>
-                <input type="text" class="form-input" placeholder="Örn: ${idx + 1}. Adım: Malzemeleri Kaseye Koyalım" value="${escapeHtmlAttr(s.title)}" oninput="updateStepField(${idx}, 'title', this.value)">
+                <label style="font-size:13px; font-weight:700;">Aşama Başlığı (Örn: Sebzeleri Yıkayalım):</label>
+                <input type="text" class="form-input" style="font-size:15px; font-weight:700;" placeholder="Örn: ${idx + 1}. Adım: Malzemeleri Kaseye Koyalım" value="${escapeHtmlAttr(s.title)}" oninput="updateStepField(${idx}, 'title', this.value)">
               </div>
               <div class="form-group" style="margin-bottom:0; flex:1; max-width:160px;">
-                <label style="font-size:12px;">⏱️ Süre Sayacı (Dk):</label>
-                <input type="number" min="0" max="180" class="form-input" value="${s.timerMinutes || 0}" oninput="updateStepField(${idx}, 'timerMinutes', this.value)">
+                <label style="font-size:13px; font-weight:700;">⏱️ Süre Sayacı (Dk):</label>
+                <input type="number" min="0" max="180" class="form-input" style="font-size:15px; font-weight:700;" value="${s.timerMinutes || 0}" oninput="updateStepField(${idx}, 'timerMinutes', this.value)">
               </div>
             </div>
 
-            <div class="form-group" style="margin-bottom:10px;">
-              <label style="font-size:12px;">👩‍🍳 Çocuğun Ekranda Göreceği Açıklama Metni:</label>
-              <textarea class="form-textarea" rows="2" placeholder="Bu aşamada ne yapılacağını açık ve anlaşılır bir dille yazın..." oninput="updateStepField(${idx}, 'instruction', this.value)">${escapeHtmlAttr(s.instruction)}</textarea>
+            <div class="form-group" style="margin-bottom:12px;">
+              <label style="font-size:13px; font-weight:700;">👩‍🍳 Çocuğun Ekranda Göreceği Açıklama Metni (Büyük Punto):</label>
+              <textarea class="form-textarea" rows="2" style="font-size:17px; font-weight:700; line-height:1.4; color:#0f172a;" placeholder="Bu aşamada ne yapılacağını açık ve anlaşılır bir dille yazın..." oninput="updateStepField(${idx}, 'instruction', this.value)">${escapeHtmlAttr(s.instruction)}</textarea>
             </div>
 
             <div class="form-group" style="margin-bottom:0;">
-              <label style="font-size:12px;">🔊 Sesli Asistan Okuma Metni (Boş bırakılırsa üstteki açıklama seslendirilir):</label>
-              <input type="text" class="form-input" placeholder="Robotun çocuğa sesli okuyacağı yönerge..." value="${escapeHtmlAttr(s.voicePrompt)}" oninput="updateStepField(${idx}, 'voicePrompt', this.value)">
+              <label style="font-size:13px; font-weight:700;">🔊 Sesli Asistan Okuma Metni (Boş bırakılırsa üstteki açıklama seslendirilir):</label>
+              <input type="text" class="form-input" style="font-size:14px;" placeholder="Robotun çocuğa sesli okuyacağı yönerge..." value="${escapeHtmlAttr(s.voicePrompt)}" oninput="updateStepField(${idx}, 'voicePrompt', this.value)">
             </div>
           </div>
         </div>

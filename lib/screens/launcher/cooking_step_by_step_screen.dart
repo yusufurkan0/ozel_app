@@ -628,28 +628,28 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                 },
                 child: SingleChildScrollView(
                   key: ValueKey<int>(_currentStepIndex),
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Ana Adım Kartı
                     Container(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 12,
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 14,
                             offset: const Offset(0, 4),
                           ),
                         ],
                       ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Adım Görseli / Fotoğrafı (Görsel Anlatım - Büyütülmüş & Net)
+                          // 1. Adım Görseli / Fotoğrafı (Boşluksuz Tam Genişlik & Büyük Boyut)
                           if (currentStep.imagePath != null) ...[
                             GestureDetector(
                               onTap: () => _showStepImagePreviewDialog(
@@ -662,43 +662,38 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                                 children: [
                                   Container(
                                     width: double.infinity,
-                                    constraints: BoxConstraints(
-                                      minHeight: 280,
-                                      maxHeight: MediaQuery.of(context).size.height * 0.44,
-                                    ),
                                     decoration: BoxDecoration(
                                       color: Colors.white,
-                                      borderRadius: BorderRadius.circular(22),
+                                      borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                        color: widget.recipe.themeColor.withValues(alpha: 0.35),
-                                        width: 2.5,
+                                        color: widget.recipe.themeColor.withValues(alpha: 0.45),
+                                        width: 3,
                                       ),
                                       boxShadow: [
                                         BoxShadow(
                                           color: Colors.black.withValues(alpha: 0.08),
-                                          blurRadius: 14,
-                                          offset: const Offset(0, 5),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 4),
                                         ),
                                       ],
                                     ),
                                     child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(20),
+                                      borderRadius: BorderRadius.circular(17),
                                       child: ConstrainedBox(
                                         constraints: BoxConstraints(
-                                          minHeight: 240,
-                                          maxHeight: MediaQuery.of(context).size.height * 0.44,
+                                          maxHeight: MediaQuery.of(context).size.height * 0.48,
                                         ),
                                         child: KitchenRecipe.buildImage(
                                           currentStep.imagePath!,
-                                          fit: BoxFit.contain,
+                                          fit: BoxFit.fitWidth,
                                           errorBuilder: (_, _, _) => Container(
-                                            height: 180,
+                                            height: 200,
                                             alignment: Alignment.center,
                                             color: widget.recipe.themeColor.withValues(alpha: 0.1),
                                             child: Icon(
                                               currentStep.icon,
                                               color: widget.recipe.themeColor,
-                                              size: 64,
+                                              size: 68,
                                             ),
                                           ),
                                         ),
@@ -706,20 +701,13 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                                     ),
                                   ),
                                   Positioned(
-                                    right: 12,
-                                    bottom: 12,
+                                    right: 10,
+                                    bottom: 10,
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.75),
+                                        color: Colors.black.withValues(alpha: 0.78),
                                         borderRadius: BorderRadius.circular(20),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: 0.3),
-                                            blurRadius: 6,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
                                       ),
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -741,42 +729,56 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 18),
+                            const SizedBox(height: 14),
                           ] else ...[
                             // Büyük İkon
-                            Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: widget.recipe.themeColor.withValues(alpha: 0.12),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                currentStep.icon,
-                                color: widget.recipe.themeColor,
-                                size: 42,
+                            Center(
+                              child: Container(
+                                width: 88,
+                                height: 88,
+                                decoration: BoxDecoration(
+                                  color: widget.recipe.themeColor.withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  currentStep.icon,
+                                  color: widget.recipe.themeColor,
+                                  size: 46,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 18),
+                            const SizedBox(height: 14),
                           ],
 
-                          // Talimat Metni
-                          Text(
-                            currentStep.instruction,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                              height: 1.4,
+                          // 2. Büyütülmüş & Belirgin Yönerge Metni Kutusu
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            decoration: BoxDecoration(
+                              color: widget.recipe.themeColor.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: widget.recipe.themeColor.withValues(alpha: 0.25),
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              currentStep.instruction,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary,
+                                height: 1.35,
+                              ),
                             ),
                           ),
 
                           // İpucu veya Güvenlik Uyarısı Varsa
                           if (currentStep.tip != null && currentStep.tip!.isNotEmpty) ...[
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 14),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               decoration: BoxDecoration(
                                 color: Colors.amber.shade50,
                                 borderRadius: BorderRadius.circular(14),
@@ -784,15 +786,15 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 20),
+                                  const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 22),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       currentStep.tip!,
                                       style: TextStyle(
-                                        fontSize: 13,
+                                        fontSize: 15,
                                         color: Colors.amber.shade900,
-                                        fontWeight: FontWeight.w500,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ),
@@ -1044,3 +1046,4 @@ class _CookingStepByStepScreenState extends State<CookingStepByStepScreen> {
   );
 }
 }
+

@@ -1709,13 +1709,26 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
                         ),
                         child: Row(
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(isCoin ? 20 : 6),
-                              child: Image.asset(imagePath, width: isCoin ? 38 : 60, height: 38, fit: BoxFit.cover),
-                            ),
-                            const SizedBox(width: 10),
                             Expanded(
-                              child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  setModalState(() => tempReceived[val] = count + 1);
+                                },
+                                child: Row(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(isCoin ? 20 : 6),
+                                      child: Image.asset(imagePath, width: isCoin ? 38 : 60, height: 38, fit: BoxFit.cover),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                             IconButton(
                               icon: const Icon(Icons.remove_circle_outline_rounded, color: Color(0xFFEF4444), size: 24),
@@ -2070,36 +2083,95 @@ class _CashLedgerScreenState extends State<CashLedgerScreen> {
 
               return Card(
                 margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  side: count > 0
+                      ? BorderSide(color: color.withValues(alpha: 0.45), width: 1.5)
+                      : BorderSide.none,
+                ),
                 elevation: 1,
+                clipBehavior: Clip.antiAlias,
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   child: Row(
                     children: [
-                      // Banknot / Para Görseli
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(isCoin ? 30 : 10),
-                        child: Container(
-                          width: isCoin ? 54 : 90,
-                          height: 54,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: color.withValues(alpha: 0.3)),
-                            borderRadius: BorderRadius.circular(isCoin ? 30 : 10),
-                          ),
-                          child: Image.asset(imagePath, fit: BoxFit.cover),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
+                      // Banknot / Para Görseli ve Başlığı (Tıklanabilir Buton: Basınca +1 Artar)
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: color)),
-                            Text(
-                              isCoin ? 'Madeni Para' : 'Kağıt Banknot',
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            splashColor: color.withValues(alpha: 0.18),
+                            highlightColor: color.withValues(alpha: 0.08),
+                            onTap: () {
+                              HapticFeedback.lightImpact();
+                              _updateCount(val, 1);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              child: Row(
+                                children: [
+                                  Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(isCoin ? 30 : 10),
+                                        child: Container(
+                                          width: isCoin ? 58 : 96,
+                                          height: 58,
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: color.withValues(alpha: 0.4), width: 1.5),
+                                            borderRadius: BorderRadius.circular(isCoin ? 30 : 10),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: color.withValues(alpha: 0.15),
+                                                blurRadius: 6,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Image.asset(imagePath, fit: BoxFit.cover),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        right: -4,
+                                        bottom: -4,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF16A34A),
+                                            borderRadius: BorderRadius.circular(999),
+                                            border: Border.all(color: Colors.white, width: 1.5),
+                                          ),
+                                          child: const Text(
+                                            '+1',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: color)),
+                                        Text(
+                                          isCoin ? 'Madeni Para (Resme bas +1)' : 'Kağıt Banknot (Resme bas +1)',
+                                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B), fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                       // Artır / Azalt Kontrolleri
