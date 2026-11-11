@@ -299,9 +299,14 @@ function renderOverviewView() {
           </span>
         </td>
         <td>
-          <button class="btn btn-primary" onclick="openReviewModal('${f.id}')">
-            🔍 İncele & Not Yaz
-          </button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button class="btn btn-primary" onclick="openReviewModal('${f.id}')">
+              🔍 İncele & Not Yaz
+            </button>
+            <button class="btn btn-danger-outline" style="padding:7px 10px;" title="Anketi Sil (Firebase + Yerel)" onclick="deleteEvaluationForm('${f.id}')">
+              🗑️
+            </button>
+          </div>
         </td>
       </tr>
     `).join('');
@@ -373,13 +378,56 @@ function renderEvaluationsView() {
         </div>
       </td>
       <td>
-        <button class="btn btn-primary" onclick="openReviewModal('${f.id}')">
-          🔍 İncele & Değerlendir
-        </button>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-primary" onclick="openReviewModal('${f.id}')">
+            🔍 İncele & Değerlendir
+          </button>
+          <button class="btn btn-danger-outline" style="padding:7px 11px;" title="Anketi Sil (Firebase + Yerel)" onclick="deleteEvaluationForm('${f.id}')">
+            🗑️ Sil
+          </button>
+        </div>
       </td>
     </tr>
   `).join('');
 }
+
+window.deleteEvaluationForm = async function(formId) {
+  const form = dataService.getFormById(formId);
+  const label = form ? `"${form.studentName} - ${form.formTitle} (${form.date})"` : 'Bu anketi';
+  if (!confirm(`${label} kaydını hem panelden hem de Firebase bulut veritabanından kalıcı olarak silmek istediğinize emin misiniz?`)) {
+    return;
+  }
+  await dataService.deleteForm(formId);
+  showToast('🗑️ Anket Silindi', 'Anket hem panelden hem de Firebase bulut veritabanından kalıcı olarak silindi.');
+  renderCurrentView();
+};
+
+window.deleteActiveReviewForm = async function() {
+  if (!activeFormForReview) return;
+  const id = activeFormForReview.id;
+  const name = activeFormForReview.studentName || 'Öğrenci';
+  if (!confirm(`${name} adlı öğrencinin bu anketini hem panelden hem de Firebase buluttan silmek istediğinize emin misiniz?`)) {
+    return;
+  }
+  closeReviewModal();
+  await dataService.deleteForm(id);
+  showToast('🗑️ Anket Silindi', 'Anket Firebase ve yerel veritabanından kaldırıldı.');
+  renderCurrentView();
+};
+
+window.deleteAllEvaluations = async function() {
+  const forms = dataService.getForms();
+  if (!forms || forms.length === 0) {
+    showToast('📭 Anket Yok', 'Silinecek anket kaydı bulunmuyor.');
+    return;
+  }
+  if (!confirm(`Listedeki tüm ${forms.length} anketi hem panelden hem de Firebase bulut veritabanından kalıcı olarak silmek istediğinize emin misiniz?`)) {
+    return;
+  }
+  await dataService.deleteAllForms();
+  showToast('🗑️ Tüm Anketler Temizlendi', 'Eski anketlerin tamamı Firebase ve panelden silindi.');
+  renderCurrentView();
+};
 
 // ------------------------------------------------------------
 // ANKET İNCELEME MODALI

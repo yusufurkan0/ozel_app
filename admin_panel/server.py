@@ -240,6 +240,34 @@ class LiveSyncHandler(SimpleHTTPRequestHandler):
             broadcast_event("evaluation_reviewed", {"id": target_id, "teacherNote": note})
             self.wfile.write(json.dumps({"success": True}, ensure_ascii=False).encode("utf-8"))
 
+        elif path == "/api/evaluations/delete":
+            if payload.get("all"):
+                old_ids = [item.get("id") for item in db.get("evaluations", []) if item.get("id")]
+                db["evaluations"] = []
+                save_database(db)
+                for eid in old_ids:
+                    try:
+                        fs_url = f"https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/evaluations/{quote(str(eid), safe='')}"
+                        req = urllib.request.Request(fs_url, method="DELETE")
+                        urllib.request.urlopen(req, timeout=4)
+                    except Exception:
+                        pass
+                broadcast_event("evaluation_deleted", {"all": True})
+                self.wfile.write(json.dumps({"success": True, "all": True}, ensure_ascii=False).encode("utf-8"))
+            else:
+                target_id = payload.get("id")
+                db["evaluations"] = [e for e in db.get("evaluations", []) if e.get("id") != target_id]
+                save_database(db)
+                if target_id:
+                    try:
+                        fs_url = f"https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/evaluations/{quote(str(target_id), safe='')}"
+                        req = urllib.request.Request(fs_url, method="DELETE")
+                        urllib.request.urlopen(req, timeout=4)
+                    except Exception:
+                        pass
+                broadcast_event("evaluation_deleted", {"id": target_id})
+                self.wfile.write(json.dumps({"success": True, "id": target_id}, ensure_ascii=False).encode("utf-8"))
+
         elif path == "/api/recipes":
             rec_id = payload.get("id") or f"rec_{int(time.time()*1000)}"
             payload["id"] = rec_id

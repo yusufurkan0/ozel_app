@@ -164,6 +164,10 @@
               <h2>Gelen Günlük Anketler & Değerlendirmeler</h2>
               <p>Çocukların doldurduğu 'Okul, İşyeri, Tüm Gün' formlarını inceleyin ve geri bildirim verin.</p>
             </div>
+            <button class="btn btn-danger-outline" onclick="deleteAllEvaluations()" style="padding:10px 16px; font-weight:700;">
+              <span>🗑️</span>
+              <span>Tüm Eski Anketleri Temizle</span>
+            </button>
           </div>
 
           <div class="card-panel">
@@ -585,9 +589,12 @@
         </div>
       </div>
 
-      <div class="modal-footer">
-        <button class="btn btn-outline" onclick="copyReportForParent()">📲 Veliye WhatsApp Raporu Kopyala</button>
-        <button class="btn btn-success" onclick="saveFormReview()">💾 İncelendi Olarak Kaydet</button>
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <button class="btn btn-danger-outline" onclick="deleteActiveReviewForm()">🗑️ Bu Anketi Sil</button>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-outline" onclick="copyReportForParent()">📲 Veliye WhatsApp Raporu Kopyala</button>
+          <button class="btn btn-success" onclick="saveFormReview()">💾 İncelendi Olarak Kaydet</button>
+        </div>
       </div>
     </div>
   </div>

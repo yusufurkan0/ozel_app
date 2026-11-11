@@ -169,6 +169,17 @@ class PanelDataService {
         }
       });
 
+      // Değerlendirme Anketi Silindiğinde
+      this.eventSource.addEventListener('evaluation_deleted', (e) => {
+        const payload = JSON.parse(e.data).data;
+        if (payload && payload.all) {
+          this.forms = [];
+        } else if (payload && payload.id) {
+          this.forms = this.forms.filter((f) => f.id !== payload.id);
+        }
+        if (typeof renderCurrentView === 'function') renderCurrentView();
+      });
+
       // Görev Eklendiğinde veya Güncellendiğinde
       this.eventSource.addEventListener('task_added', (e) => {
         const newTask = JSON.parse(e.data).data;
@@ -443,6 +454,71 @@ class PanelDataService {
     }).catch(console.error);
   }
 
+  async deleteForm(formId) {
+    if (!formId) return;
+    this.forms = this.forms.filter((f) => f.id !== formId);
+    if (typeof renderCurrentView === 'function') renderCurrentView();
+
+    // 1. Firebase Firestore SDK üzerinden sil
+    if (this.db) {
+      try {
+        await this.db.collection('evaluations').doc(formId).delete();
+      } catch (e) {
+        console.warn('Firestore SDK deleteForm error:', e);
+      }
+    }
+
+    // 2. Doğrudan Firebase Firestore REST API üzerinden sil (%100 bulut silme garantisi)
+    try {
+      const encodedId = encodeURIComponent(formId);
+      await fetch(
+        `https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/evaluations/${encodedId}`,
+        { method: 'DELETE' }
+      );
+    } catch (e) {
+      console.warn('Firestore REST deleteForm error:', e);
+    }
+
+    // 3. Yerel sunucudan (live_database.json) sil
+    try {
+      await fetch(`${this.apiBase}/api/evaluations/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: formId }),
+      });
+    } catch (e) {
+      console.warn('Local server deleteForm error:', e);
+    }
+  }
+
+  async deleteAllForms() {
+    const oldForms = [...this.forms];
+    this.forms = [];
+    if (typeof renderCurrentView === 'function') renderCurrentView();
+
+    for (const f of oldForms) {
+      if (!f.id) continue;
+      if (this.db) {
+        this.db.collection('evaluations').doc(f.id).delete().catch(() => {});
+      }
+      const encodedId = encodeURIComponent(f.id);
+      fetch(
+        `https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/evaluations/${encodedId}`,
+        { method: 'DELETE' }
+      ).catch(() => {});
+    }
+
+    try {
+      await fetch(`${this.apiBase}/api/evaluations/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      });
+    } catch (e) {
+      console.warn('Local server deleteAllForms error:', e);
+    }
+  }
+
   // Tarifler
   _normalizeRecipe(r) {
     if (!r) return r;
@@ -651,22 +727,28 @@ class PanelDataService {
     this.forms = [];
     this.tasks = [];
 
-    if (this.db) {
-      try {
-        for (const s of oldStudents) {
-          if (s.id) this.db.collection('students').doc(s.id).delete().catch(() => {});
-        }
-        for (const t of oldTeachers) {
-          if (t.id) this.db.collection('teachers').doc(t.id).delete().catch(() => {});
-        }
-        for (const f of oldForms) {
-          if (f.id) this.db.collection('evaluations').doc(f.id).delete().catch(() => {});
-        }
-        for (const tsk of oldTasks) {
-          if (tsk.id) this.db.collection('tasks').doc(tsk.id).delete().catch(() => {});
-        }
-      } catch (e) {
-        console.warn('Firestore clearAllToEmpty error:', e);
+    for (const f of oldForms) {
+      if (f.id) {
+        if (this.db) this.db.collection('evaluations').doc(f.id).delete().catch(() => {});
+        fetch(`https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/evaluations/${encodeURIComponent(f.id)}`, { method: 'DELETE' }).catch(() => {});
+      }
+    }
+    for (const s of oldStudents) {
+      if (s.id) {
+        if (this.db) this.db.collection('students').doc(s.id).delete().catch(() => {});
+        fetch(`https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/students/${encodeURIComponent(s.id)}`, { method: 'DELETE' }).catch(() => {});
+      }
+    }
+    for (const t of oldTeachers) {
+      if (t.id) {
+        if (this.db) this.db.collection('teachers').doc(t.id).delete().catch(() => {});
+        fetch(`https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/teachers/${encodeURIComponent(t.id)}`, { method: 'DELETE' }).catch(() => {});
+      }
+    }
+    for (const tsk of oldTasks) {
+      if (tsk.id) {
+        if (this.db) this.db.collection('tasks').doc(tsk.id).delete().catch(() => {});
+        fetch(`https://firestore.googleapis.com/v1/projects/ozel-app-4ee23/databases/(default)/documents/tasks/${encodeURIComponent(tsk.id)}`, { method: 'DELETE' }).catch(() => {});
       }
     }
 
