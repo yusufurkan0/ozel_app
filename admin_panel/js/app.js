@@ -16,7 +16,7 @@ let currentStepsList = [];
 let currentVerificationCode = '';
 
 const AUTH_STORAGE_KEY = 'ozel_panel_auth_creds_v1';
-const AUTH_SESSION_KEY = 'ozel_panel_session_v1';
+const AUTH_SESSION_KEY = 'ozel_panel_session_v2';
 
 function getPanelAuthCredentials() {
   try {
@@ -24,15 +24,16 @@ function getPanelAuthCredentials() {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.adminUser && parsed.adminPass) {
-        return parsed;
+        return {
+          adminUser: parsed.adminUser,
+          adminPass: parsed.adminPass,
+        };
       }
     }
   } catch (_) {}
   return {
     adminUser: 'admin',
     adminPass: '123456',
-    teacherUser: 'ogretmen',
-    teacherPass: '123456',
   };
 }
 
@@ -58,32 +59,15 @@ window.generateNewVerificationCode = function() {
   }
 };
 
-window.copyVerificationCodeToInput = function() {
-  const inputEl = document.getElementById('loginVerifyCodeInput');
-  if (inputEl && currentVerificationCode) {
-    inputEl.value = currentVerificationCode;
-    inputEl.focus();
-  }
-};
-
 window.toggleLoginPasswordVisibility = function() {
   const passInput = document.getElementById('loginPassword');
   if (!passInput) return;
   passInput.type = passInput.type === 'password' ? 'text' : 'password';
 };
 
-window.fillDemoAdminCredentials = function() {
-  const creds = getPanelAuthCredentials();
-  const userEl = document.getElementById('loginUsername');
-  const passEl = document.getElementById('loginPassword');
-  const codeEl = document.getElementById('loginVerifyCodeInput');
-  if (userEl) userEl.value = creds.adminUser;
-  if (passEl) passEl.value = creds.adminPass;
-  if (codeEl) codeEl.value = currentVerificationCode;
-};
-
 function initPanelAuth() {
   generateNewVerificationCode();
+  dataService.setCurrentRole('admin');
 
   // Firebase'de kayıtlı güncel şifre varsa senkronize et
   if (dataService && dataService.db) {
@@ -91,7 +75,10 @@ function initPanelAuth() {
       if (doc && doc.exists) {
         const data = doc.data();
         if (data && data.adminUser && data.adminPass) {
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({
+            adminUser: data.adminUser,
+            adminPass: data.adminPass,
+          }));
         }
       }
     }).catch(() => {});
@@ -106,12 +93,7 @@ function initPanelAuth() {
       const sessionData = JSON.parse(savedSession);
       if (sessionData && sessionData.authenticated) {
         overlay.style.display = 'none';
-        if (sessionData.role === 'teacher') {
-          dataService.setCurrentRole('teacher');
-        } else {
-          dataService.setCurrentRole('admin');
-        }
-        setupRoleSwitcher();
+        dataService.setCurrentRole('admin');
         renderCurrentView();
         updateHeaderAndStats();
         return;
@@ -139,41 +121,22 @@ window.handlePanelLogin = function(e) {
   // 1. Doğrulama Kodu Kontrolü
   if (!enteredCode || enteredCode !== currentVerificationCode) {
     if (errorBox) {
-      errorBox.textContent = '❌ Doğrulama kodu hatalı! Lütfen ekrandaki 6 haneli güvenlik kodunu doğru girin.';
+      errorBox.textContent = 'Doğrulama kodu hatalı. Lütfen güvenlik kodunu tekrar girin.';
       errorBox.style.display = 'block';
     }
     generateNewVerificationCode();
     return;
   }
 
-  // 2. Kullanıcı Adı ve Şifre Kontrolü
+  // 2. Yönetici Kullanıcı Adı ve Şifre Kontrolü
   const creds = getPanelAuthCredentials();
-  let matchedRole = null;
-  let displayName = '';
+  const isAdminValid =
+    enteredUser === (creds.adminUser || 'admin').toLowerCase() &&
+    enteredPass === creds.adminPass;
 
-  if (enteredUser === (creds.adminUser || 'admin').toLowerCase() && enteredPass === creds.adminPass) {
-    matchedRole = 'admin';
-    displayName = 'Kurum Yöneticisi (Admin)';
-  } else if (enteredUser === (creds.teacherUser || 'ogretmen').toLowerCase() && enteredPass === creds.teacherPass) {
-    matchedRole = 'teacher';
-    displayName = 'Öğretmen';
-  } else {
-    // Kayıtlı öğretmenlerden biri kendi adı veya e-postasıyla giriş yapıyorsa
-    const teachers = dataService.getTeachers() || [];
-    const foundTeacher = teachers.find((t) =>
-      (t.name && t.name.trim().toLowerCase() === enteredUser) ||
-      (t.email && t.email.trim().toLowerCase() === enteredUser)
-    );
-    if (foundTeacher && enteredPass === creds.teacherPass) {
-      matchedRole = 'teacher';
-      displayName = foundTeacher.name;
-      dataService.setActiveTeacherId(foundTeacher.id);
-    }
-  }
-
-  if (!matchedRole) {
+  if (!isAdminValid) {
     if (errorBox) {
-      errorBox.textContent = '❌ Kullanıcı adı veya şifre hatalı! Lütfen bilgilerinizi kontrol edin.';
+      errorBox.textContent = 'Kullanıcı adı veya şifre hatalı.';
       errorBox.style.display = 'block';
     }
     generateNewVerificationCode();
@@ -183,7 +146,7 @@ window.handlePanelLogin = function(e) {
   // Başarılı Giriş
   const sessionPayload = JSON.stringify({
     authenticated: true,
-    role: matchedRole,
+    role: 'admin',
     username: enteredUser,
     loginAt: Date.now(),
   });
@@ -198,11 +161,10 @@ window.handlePanelLogin = function(e) {
   const overlay = document.getElementById('authLoginOverlay');
   if (overlay) overlay.style.display = 'none';
 
-  dataService.setCurrentRole(matchedRole);
-  setupRoleSwitcher();
+  dataService.setCurrentRole('admin');
   renderCurrentView();
   updateHeaderAndStats();
-  showToast('🔓 Giriş Başarılı', `Hoş geldiniz, ${displayName}! Doğrulama tamamlandı.`);
+  showToast('🔓 Giriş Başarılı', 'Yönetim paneline hoş geldiniz.');
 };
 
 window.logoutPanel = function() {
@@ -222,8 +184,6 @@ window.openAuthSettingsModal = function() {
   const creds = getPanelAuthCredentials();
   document.getElementById('settingAdminUser').value = creds.adminUser || 'admin';
   document.getElementById('settingAdminPass').value = creds.adminPass || '123456';
-  document.getElementById('settingTeacherUser').value = creds.teacherUser || 'ogretmen';
-  document.getElementById('settingTeacherPass').value = creds.teacherPass || '123456';
   document.getElementById('authSettingsModal').classList.add('active');
 };
 
@@ -234,94 +194,35 @@ window.closeAuthSettingsModal = function() {
 window.saveAuthSettings = function() {
   const adminUser = document.getElementById('settingAdminUser').value.trim() || 'admin';
   const adminPass = document.getElementById('settingAdminPass').value.trim() || '123456';
-  const teacherUser = document.getElementById('settingTeacherUser').value.trim() || 'ogretmen';
-  const teacherPass = document.getElementById('settingTeacherPass').value.trim() || '123456';
 
   savePanelAuthCredentials({
     adminUser,
     adminPass,
-    teacherUser,
-    teacherPass,
   });
 
   closeAuthSettingsModal();
-  showToast('🔑 Giriş Bilgileri Güncellendi', `Yeni yönetici kullanıcı adı: "${adminUser}" olarak kaydedildi.`);
+  showToast('🔑 Giriş Bilgileri Güncellendi', `Yönetici kullanıcı adı "${adminUser}" olarak kaydedildi.`);
 };
 
 function initApp() {
+  dataService.setCurrentRole('admin');
   initPanelAuth();
-  setupRoleSwitcher();
   setupNavigation();
-  setupTeacherSelector();
   setupEventListeners();
   renderCurrentView();
   updateHeaderAndStats();
 }
 
 // ------------------------------------------------------------
-// ROL & ÖĞRETMEN SEÇİCİ
+// ROL & ÖĞRETMEN SEÇİCİ (Yalnızca Admin Modu)
 // ------------------------------------------------------------
 function setupRoleSwitcher() {
-  const adminBtn = document.getElementById('roleAdminBtn');
-  const teacherBtn = document.getElementById('roleTeacherBtn');
-  const teacherSelectWrapper = document.getElementById('teacherSelectWrapper');
-
-  const currentRole = dataService.getCurrentRole();
-  if (currentRole === 'admin') {
-    adminBtn.classList.add('active', 'admin');
-    teacherBtn.classList.remove('active');
-    teacherSelectWrapper.style.display = 'none';
-  } else {
-    teacherBtn.classList.add('active');
-    adminBtn.classList.remove('active', 'admin');
-    teacherSelectWrapper.style.display = 'flex';
-  }
-
-  adminBtn.addEventListener('click', () => {
-    dataService.setCurrentRole('admin');
-    adminBtn.classList.add('active', 'admin');
-    teacherBtn.classList.remove('active');
-    teacherSelectWrapper.style.display = 'none';
-    showToast('👑 Yönetici (Admin) Moduna Geçildi', 'Tüm kurum verileri ve tarif yönetimi aktif.');
-    renderCurrentView();
-    updateHeaderAndStats();
-  });
-
-  teacherBtn.addEventListener('click', () => {
-    dataService.setCurrentRole('teacher');
-    teacherBtn.classList.add('active');
-    adminBtn.classList.remove('active', 'admin');
-    teacherSelectWrapper.style.display = 'flex';
-    const activeTeacher = dataService.getTeacherById(dataService.getActiveTeacherId());
-    showToast('🎓 Öğretmen Moduna Geçildi', activeTeacher ? `${activeTeacher.name} sınıfı görüntüleniyor.` : 'Lütfen bir öğretmen seçin.');
-    renderCurrentView();
-    updateHeaderAndStats();
-  });
+  dataService.setCurrentRole('admin');
 }
 
 function setupTeacherSelector() {
   const select = document.getElementById('teacherSelect');
-  const teachers = dataService.getTeachers();
-  const activeId = dataService.getActiveTeacherId();
-
-  if (teachers.length === 0) {
-    select.innerHTML = '<option value="">Henüz Öğretmen Yok</option>';
-    return;
-  }
-
-  select.innerHTML = teachers
-    .map((t) => `<option value="${t.id}" ${t.id === activeId ? 'selected' : ''}>${t.avatar || '👨‍🏫'} ${t.name} (${t.title || 'Öğretmen'})</option>`)
-    .join('');
-
-  select.addEventListener('change', (e) => {
-    dataService.setActiveTeacherId(e.target.value);
-    const teacher = dataService.getTeacherById(e.target.value);
-    if (teacher) {
-      showToast('Öğretmen Değiştirildi', `${teacher.name} sınıfına geçildi.`);
-    }
-    renderCurrentView();
-    updateHeaderAndStats();
-  });
+  if (!select) return;
 }
 
 // ------------------------------------------------------------
@@ -403,17 +304,10 @@ function updateBadgeCounts() {
 }
 
 function updateHeaderAndStats() {
-  const role = dataService.getCurrentRole();
   const roleBadge = document.getElementById('userRoleBadge');
   if (roleBadge) {
-    if (role === 'admin') {
-      roleBadge.textContent = '👑 Kurum Yöneticisi (Admin)';
-      roleBadge.className = 'status-badge published';
-    } else {
-      const t = dataService.getTeacherById(dataService.getActiveTeacherId());
-      roleBadge.textContent = t ? `🎓 Öğretmen: ${t.name}` : '🎓 Öğretmen Modu (Öğretmen Ekleyin)';
-      roleBadge.className = 'status-badge pending';
-    }
+    roleBadge.textContent = '🛡️ Sistem Yöneticisi (Admin)';
+    roleBadge.className = 'status-badge published';
   }
 }
 
