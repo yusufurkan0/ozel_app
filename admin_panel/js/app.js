@@ -13,8 +13,243 @@ let currentView = 'overview';
 let activeFormForReview = null;
 let currentIngredientsList = [];
 let currentStepsList = [];
+let currentVerificationCode = '';
+
+const AUTH_STORAGE_KEY = 'ozel_panel_auth_creds_v1';
+const AUTH_SESSION_KEY = 'ozel_panel_session_v1';
+
+function getPanelAuthCredentials() {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.adminUser && parsed.adminPass) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  return {
+    adminUser: 'admin',
+    adminPass: '123456',
+    teacherUser: 'ogretmen',
+    teacherPass: '123456',
+  };
+}
+
+function savePanelAuthCredentials(creds) {
+  try {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(creds));
+  } catch (_) {}
+  if (dataService && dataService.db) {
+    dataService.db.collection('settings').doc('panel_auth').set(creds, { merge: true }).catch(() => {});
+  }
+}
+
+window.generateNewVerificationCode = function() {
+  const randomCode = String(Math.floor(100000 + Math.random() * 900000));
+  currentVerificationCode = randomCode;
+  const displayEl = document.getElementById('generatedVerifyCodeDisplay');
+  if (displayEl) {
+    displayEl.textContent = randomCode;
+  }
+  const inputEl = document.getElementById('loginVerifyCodeInput');
+  if (inputEl) {
+    inputEl.value = '';
+  }
+};
+
+window.copyVerificationCodeToInput = function() {
+  const inputEl = document.getElementById('loginVerifyCodeInput');
+  if (inputEl && currentVerificationCode) {
+    inputEl.value = currentVerificationCode;
+    inputEl.focus();
+  }
+};
+
+window.toggleLoginPasswordVisibility = function() {
+  const passInput = document.getElementById('loginPassword');
+  if (!passInput) return;
+  passInput.type = passInput.type === 'password' ? 'text' : 'password';
+};
+
+window.fillDemoAdminCredentials = function() {
+  const creds = getPanelAuthCredentials();
+  const userEl = document.getElementById('loginUsername');
+  const passEl = document.getElementById('loginPassword');
+  const codeEl = document.getElementById('loginVerifyCodeInput');
+  if (userEl) userEl.value = creds.adminUser;
+  if (passEl) passEl.value = creds.adminPass;
+  if (codeEl) codeEl.value = currentVerificationCode;
+};
+
+function initPanelAuth() {
+  generateNewVerificationCode();
+
+  // Firebase'de kayıtlı güncel şifre varsa senkronize et
+  if (dataService && dataService.db) {
+    dataService.db.collection('settings').doc('panel_auth').get().then((doc) => {
+      if (doc && doc.exists) {
+        const data = doc.data();
+        if (data && data.adminUser && data.adminPass) {
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+        }
+      }
+    }).catch(() => {});
+  }
+
+  const overlay = document.getElementById('authLoginOverlay');
+  if (!overlay) return;
+
+  const savedSession = sessionStorage.getItem(AUTH_SESSION_KEY) || localStorage.getItem(AUTH_SESSION_KEY);
+  if (savedSession) {
+    try {
+      const sessionData = JSON.parse(savedSession);
+      if (sessionData && sessionData.authenticated) {
+        overlay.style.display = 'none';
+        if (sessionData.role === 'teacher') {
+          dataService.setCurrentRole('teacher');
+        } else {
+          dataService.setCurrentRole('admin');
+        }
+        setupRoleSwitcher();
+        renderCurrentView();
+        updateHeaderAndStats();
+        return;
+      }
+    } catch (_) {}
+  }
+
+  overlay.style.display = 'flex';
+}
+
+window.handlePanelLogin = function(e) {
+  if (e) e.preventDefault();
+  const userEl = document.getElementById('loginUsername');
+  const passEl = document.getElementById('loginPassword');
+  const codeEl = document.getElementById('loginVerifyCodeInput');
+  const rememberEl = document.getElementById('loginRememberMe');
+  const errorBox = document.getElementById('loginErrorBox');
+
+  const enteredUser = (userEl ? userEl.value : '').trim().toLowerCase();
+  const enteredPass = (passEl ? passEl.value : '').trim();
+  const enteredCode = (codeEl ? codeEl.value : '').trim();
+
+  if (errorBox) errorBox.style.display = 'none';
+
+  // 1. Doğrulama Kodu Kontrolü
+  if (!enteredCode || enteredCode !== currentVerificationCode) {
+    if (errorBox) {
+      errorBox.textContent = '❌ Doğrulama kodu hatalı! Lütfen ekrandaki 6 haneli güvenlik kodunu doğru girin.';
+      errorBox.style.display = 'block';
+    }
+    generateNewVerificationCode();
+    return;
+  }
+
+  // 2. Kullanıcı Adı ve Şifre Kontrolü
+  const creds = getPanelAuthCredentials();
+  let matchedRole = null;
+  let displayName = '';
+
+  if (enteredUser === (creds.adminUser || 'admin').toLowerCase() && enteredPass === creds.adminPass) {
+    matchedRole = 'admin';
+    displayName = 'Kurum Yöneticisi (Admin)';
+  } else if (enteredUser === (creds.teacherUser || 'ogretmen').toLowerCase() && enteredPass === creds.teacherPass) {
+    matchedRole = 'teacher';
+    displayName = 'Öğretmen';
+  } else {
+    // Kayıtlı öğretmenlerden biri kendi adı veya e-postasıyla giriş yapıyorsa
+    const teachers = dataService.getTeachers() || [];
+    const foundTeacher = teachers.find((t) =>
+      (t.name && t.name.trim().toLowerCase() === enteredUser) ||
+      (t.email && t.email.trim().toLowerCase() === enteredUser)
+    );
+    if (foundTeacher && enteredPass === creds.teacherPass) {
+      matchedRole = 'teacher';
+      displayName = foundTeacher.name;
+      dataService.setActiveTeacherId(foundTeacher.id);
+    }
+  }
+
+  if (!matchedRole) {
+    if (errorBox) {
+      errorBox.textContent = '❌ Kullanıcı adı veya şifre hatalı! Lütfen bilgilerinizi kontrol edin.';
+      errorBox.style.display = 'block';
+    }
+    generateNewVerificationCode();
+    return;
+  }
+
+  // Başarılı Giriş
+  const sessionPayload = JSON.stringify({
+    authenticated: true,
+    role: matchedRole,
+    username: enteredUser,
+    loginAt: Date.now(),
+  });
+
+  sessionStorage.setItem(AUTH_SESSION_KEY, sessionPayload);
+  if (rememberEl && rememberEl.checked) {
+    localStorage.setItem(AUTH_SESSION_KEY, sessionPayload);
+  } else {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+  }
+
+  const overlay = document.getElementById('authLoginOverlay');
+  if (overlay) overlay.style.display = 'none';
+
+  dataService.setCurrentRole(matchedRole);
+  setupRoleSwitcher();
+  renderCurrentView();
+  updateHeaderAndStats();
+  showToast('🔓 Giriş Başarılı', `Hoş geldiniz, ${displayName}! Doğrulama tamamlandı.`);
+};
+
+window.logoutPanel = function() {
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
+  localStorage.removeItem(AUTH_SESSION_KEY);
+  const passEl = document.getElementById('loginPassword');
+  if (passEl) passEl.value = '';
+  const errorBox = document.getElementById('loginErrorBox');
+  if (errorBox) errorBox.style.display = 'none';
+  generateNewVerificationCode();
+  const overlay = document.getElementById('authLoginOverlay');
+  if (overlay) overlay.style.display = 'flex';
+  showToast('🔒 Güvenli Çıkış Yapıldı', 'Oturumunuz sonlandırıldı.');
+};
+
+window.openAuthSettingsModal = function() {
+  const creds = getPanelAuthCredentials();
+  document.getElementById('settingAdminUser').value = creds.adminUser || 'admin';
+  document.getElementById('settingAdminPass').value = creds.adminPass || '123456';
+  document.getElementById('settingTeacherUser').value = creds.teacherUser || 'ogretmen';
+  document.getElementById('settingTeacherPass').value = creds.teacherPass || '123456';
+  document.getElementById('authSettingsModal').classList.add('active');
+};
+
+window.closeAuthSettingsModal = function() {
+  document.getElementById('authSettingsModal').classList.remove('active');
+};
+
+window.saveAuthSettings = function() {
+  const adminUser = document.getElementById('settingAdminUser').value.trim() || 'admin';
+  const adminPass = document.getElementById('settingAdminPass').value.trim() || '123456';
+  const teacherUser = document.getElementById('settingTeacherUser').value.trim() || 'ogretmen';
+  const teacherPass = document.getElementById('settingTeacherPass').value.trim() || '123456';
+
+  savePanelAuthCredentials({
+    adminUser,
+    adminPass,
+    teacherUser,
+    teacherPass,
+  });
+
+  closeAuthSettingsModal();
+  showToast('🔑 Giriş Bilgileri Güncellendi', `Yeni yönetici kullanıcı adı: "${adminUser}" olarak kaydedildi.`);
+};
 
 function initApp() {
+  initPanelAuth();
   setupRoleSwitcher();
   setupNavigation();
   setupTeacherSelector();
